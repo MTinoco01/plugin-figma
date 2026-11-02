@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: var(--figma-color-bg, #fff);
+    --bg2: var(--figma-color-bg-secondary, #f5f5f5);
+    --tx: var(--figma-color-text, #1e1e1e);
+    --tx2: var(--figma-color-text-secondary, #6b6b6b);
+    --bd: var(--figma-color-border, #e6e6e6);
+    --ac: var(--figma-color-bg-brand, #0d99ff);
+    --ok: var(--figma-color-text-success, #14ae5c);
+    --er: var(--figma-color-text-danger, #f24822);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--tx); font: 12px/1.45 Inter, system-ui, sans-serif; }
+  main { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  .sub { color: var(--tx2); margin-top: 2px; }
+  #zona {
+    border: 1.5px dashed var(--bd); border-radius: 10px; padding: 26px 14px; text-align: center;
+    background: var(--bg2); transition: border-color .15s, background .15s; cursor: pointer;
+  }
+  #zona.sobre { border-color: var(--ac); background: color-mix(in srgb, var(--ac) 10%, var(--bg)); }
+  #zona strong { display: block; font-size: 13px; margin-bottom: 4px; }
+  #zona .tipos { color: var(--tx2); font-size: 11px; }
+  .botoes { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+  button {
+    font: inherit; border: 1px solid var(--bd); background: var(--bg); color: var(--tx);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  button.pri { background: var(--ac); border-color: var(--ac); color: #fff; font-weight: 500; }
+  button:disabled { opacity: .5; cursor: default; }
+  details { border: 1px solid var(--bd); border-radius: 8px; padding: 0 10px; }
+  details[open] { padding-bottom: 10px; }
+  summary { cursor: pointer; padding: 8px 0; font-weight: 500; }
+  textarea {
+    width: 100%; height: 130px; resize: vertical; font: 11px/1.4 "Roboto Mono", Consolas, monospace;
+    background: var(--bg2); color: var(--tx); border: 1px solid var(--bd); border-radius: 6px; padding: 8px;
+  }
+  .opcoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .opcoes label { display: flex; flex-direction: column; gap: 3px; color: var(--tx2); }
+  .opcoes label.chk { flex-direction: row; align-items: center; gap: 6px; color: var(--tx); grid-column: 1 / -1; }
+  input[type=number], select {
+    font: inherit; color: var(--tx); background: var(--bg2); border: 1px solid var(--bd); border-radius: 6px; padding: 5px 7px;
+  }
+  #log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow: auto; }
+  #log li { display: flex; gap: 8px; align-items: baseline; padding: 6px 8px; border-radius: 6px; background: var(--bg2); }
+  #log li .st { width: 14px; flex: none; text-align: center; }
+  #log li.ok .st { color: var(--ok); }
+  #log li.er .st { color: var(--er); }
+  #log li .msg { color: var(--tx2); margin-left: auto; text-align: right; }
+  #status { color: var(--tx2); min-height: 17px; }
+  #palco { position: fixed; left: -30000px; top: 0; border: 0; background: #fff; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>Arquivo para Figma</h1>
+    <div class="sub">Solte um arquivo e ele vira camadas editáveis no Figma.</div>
+  </div>
+
+  <div id="zona" tabindex="0">
+    <strong>Solte arquivos ou pastas aqui</strong>
+    <div class="tipos">HTML · Markdown · DOCX · PDF · SVG · PNG/JPG/GIF/WebP · TXT · CSV · JSON</div>
+    <div class="tipos">Junto com um HTML, solte as imagens, CSS e fontes que ele usa (ou a pasta inteira).</div>
+    <div class="botoes">
+      <button class="pri" id="escolher">Escolher arquivos</button>
+      <button id="pasta">Escolher pasta</button>
+    </div>
+    <input id="arquivos" type="file" multiple hidden>
+    <input id="diretorio" type="file" webkitdirectory multiple hidden>
+  </div>
+
+  <details id="colar">
+    <summary>Colar HTML</summary>
+    <textarea id="html" placeholder="Cole o HTML aqui (página inteira ou só um trecho)"></textarea>
+    <div class="botoes" style="justify-content:flex-end"><button class="pri" id="converter">Converter</button></div>
+  </details>
+
+  <details id="opts">
+    <summary>Opções</summary>
+    <div class="opcoes">
+      <label>Largura da tela (px)<input id="o-largura" type="number" min="200" max="8000" value="1440"></label>
+      <label>Altura da tela (px)<input id="o-altura" type="number" min="200" max="8000" value="900"></label>
+      <label>Frame raiz
+        <select id="o-raiz">
+          <option value="auto">Automático</option>
+          <option value="pagina">Página inteira</option>
+          <option value="filhos">Cada filho do body</option>
+        </select>
+      </label>
+      <label>Espera extra (ms)<input id="o-espera" type="number" min="0" max="20000" step="100" value="400"></label>
+      <label class="chk"><input id="o-quebras" type="checkbox" checked> Quebras de linha idênticas ao original</label>
+      <label class="chk"><input id="o-achatar" type="checkbox" checked> Remover divs sem estilo (menos camadas)</label>
+      <label class="chk"><input id="o-svg" type="checkbox" checked> Imagens .svg como vetor editável</label>
+    </div>
+  </details>
+
+  <div id="status"></div>
+  <ul id="log"></ul>
+</main>
+<iframe id="palco"></iframe>
+<script>
+// ---- estilos.js
+// Leitura de estilos calculados (getComputedStyle) e tradução para pinturas,
+// bordas, cantos e efeitos no formato da API do Figma.
+
+const px = v => parseFloat(v) || 0;
+const clamp01 = v => Math.max(0, Math.min(1, v));
+
+// ---------------------------------------------------------------- cores
+
+const _cv = document.createElement('canvas');
+_cv.width = _cv.height = 1;
+const _cx = _cv.getContext('2d', { willReadFrequently: true });
+const _cores = new Map();
+
+// Qualquer cor CSS -> { r, g, b, a } de 0 a 1. Formatos que não são rgb()
+// (oklch, color(), hsl, nomes) passam por um pixel de canvas.
+function cor(str) {
+  if (!str) return null;
+  str = String(str).trim();
+  if (_cores.has(str)) return _cores.get(str);
+  let c = null;
+  const m = str.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+)(%?))?\s*\)$/);
+  if (m) {
+    const a = m[4] == null ? 1 : m[5] ? m[4] / 100 : +m[4];
+    c = { r: clamp01(m[1] / 255), g: clamp01(m[2] / 255), b: clamp01(m[3] / 255), a: clamp01(a) };
+  } else if (str === 'transparent' || str === 'none') {
+    c = { r: 0, g: 0, b: 0, a: 0 };
+  } else {
+    _cx.clearRect(0, 0, 1, 1);
+    _cx.fillStyle = 'rgba(0,0,0,0)';
+    _cx.fillStyle = str;
+    _cx.fillRect(0, 0, 1, 1);
+    const d = _cx.getImageData(0, 0, 1, 1).data;
+    c = { r: d[0] / 255, g: d[1] / 255, b: d[2] / 255, a: d[3] / 255 };
+  }
+  _cores.set(str, c);
+  return c;
+}
+
+const visivel = c => c && c.a > 0.001;
+const solido = c => ({ type: 'SOLID', color: { r: c.r, g: c.g, b: c.b }, opacity: c.a });
+
+// Separa por vírgula (ou outro separador) respeitando parênteses e aspas.
+function dividir(str, sep = ',') {
+  const out = [];
+  let nivel = 0, aspas = null, atual = '';
+  for (const ch of str) {
+    if (aspas) { if (ch === aspas) aspas = null; atual += ch; continue; }
+    if (ch === '"' || ch === "'") { aspas = ch; atual += ch; continue; }
+    if (ch === '(') nivel++;
+    if (ch === ')') nivel--;
+    if (nivel === 0 && (sep === ' ' ? /\s/.test(ch) : ch === sep)) {
+      if (atual.trim()) out.push(atual.trim());
+      atual = '';
+    } else atual += ch;
+  }
+  if (atual.trim()) out.push(atual.trim());
+  return out;
+}
+
+// Tira a cor do começo/fim de um trecho como "rgba(0,0,0,.2) 0px 4px 8px".
+const RE_COR = /(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^)]*\)|#[0-9a-f]{3,8}\b|\b(?!inset\b)[a-z]+\b/i;
+function separarCor(parte) {
+  const m = parte.match(RE_COR);
+  if (!m) return { c: null, resto: parte };
+  return { c: cor(m[0]), resto: (parte.slice(0, m.index) + ' ' + parte.slice(m.index + m[0].length)).trim() };
+}
+
+// ---------------------------------------------------------------- gradientes
+
+function inverter([[a, b, c], [d, e, f]]) {
+  const det = a * e - b * d || 1e-9;
+  return [[e / det, -b / det, (b * f - e * c) / det], [-d / det, a / det, (d * c - a * f) / det]];
+}
+
+function angulo(s) {
+  const m = s.match(/^(-?[\d.]+)(deg|rad|turn|grad)$/);
+  if (!m) return null;
+  const v = +m[1];
+  return { deg: v, rad: v * 180 / Math.PI, turn: v * 360, grad: v * 0.9 }[m[2]];
+}
+
+// Paradas de cor: [{ position 0..1, color }]. `L` converte px em fração.
+function paradas(partes, L) {
+  const st = [];
+  for (const p of partes) {
+    const { c, resto } = separarCor(p);
+    if (!c) continue; // dica de interpolação: ignorada
+    const pos = resto.split(/\s+/).filter(Boolean).map(t =>
+      t.endsWith('%') ? px(t) / 100 : t.endsWith('px') ? px(t) / (L || 1) : null);
+    const color = { r: c.r, g: c.g, b: c.b, a: c.a };
+    if (!pos.length) st.push({ position: null, color });
+    for (const q of pos) st.push({ position: q, color });
+  }
+  if (st.length < 2) return null;
+  if (st[0].position == null) st[0].position = 0;
+  if (st[st.length - 1].position == null) st[st.length - 1].position = 1;
+  for (let i = 1; i < st.length; i++) {
+    if (st[i].position == null) {
+      let j = i; while (st[j].position == null) j++;
+      const a = st[i - 1].position, b = st[j].position;
+      for (let k = i; k < j; k++) st[k].position = a + (b - a) * (k - i + 1) / (j - i + 1);
+    }
+    st[i].position = Math.max(st[i].position, st[i - 1].position);
+  }
+  for (const s of st) s.position = clamp01(s.position);
+  return st;
+}
+
+function lerPosicao(str, w, h) {
+  const t = str.trim().split(/\s+/);
+  const kw = { left: 0, center: 0.5, right: 1, top: 0, bottom: 1 };
+  let x = 0.5, y = 0.5;
+  const val = (v, total) => v.endsWith('%') ? px(v) / 100 : px(v) / total;
+  if (t.length === 1) {
+    if (t[0] === 'top' || t[0] === 'bottom') y = kw[t[0]];
+    else x = t[0] in kw ? kw[t[0]] : val(t[0], w);
+  } else {
+    let [a, b] = t;
+    if (a === 'top' || a === 'bottom' || b === 'left' || b === 'right') [a, b] = [b, a];
+    x = a in kw ? kw[a] : val(a, w);
+    y = b in kw ? kw[b] : val(b, h);
+  }
+  return [x * w, y * h];
+}
+
+function gradienteLinear(partes, w, h) {
+  let dx = 0, dy = 1;
+  if (partes[0].startsWith('in ')) partes = partes.slice(1);
+  const primeiro = partes[0].replace(/\s+in\s+.*$/, '');
+  const a = angulo(primeiro);
+  if (a != null) {
+    const t = a * Math.PI / 180; dx = Math.sin(t); dy = -Math.cos(t); partes = partes.slice(1);
+  } else if (primeiro.startsWith('to ')) {
+    const sx = /right/.test(primeiro) ? 1 : /left/.test(primeiro) ? -1 : 0;
+    const sy = /bottom/.test(primeiro) ? 1 : /top/.test(primeiro) ? -1 : 0;
+    if (sx && sy) { dx = sx * h; dy = sy * w; } else { dx = sx; dy = sy; }
+    const n = Math.hypot(dx, dy) || 1; dx /= n; dy /= n; partes = partes.slice(1);
+  }
+  const L = Math.abs(w * dx) + Math.abs(h * dy) || 1;
+  const st = paradas(partes, L);
+  if (!st) return null;
+  const p0 = [(w / 2 - dx * L / 2) / w, (h / 2 - dy * L / 2) / h];
+  const p1 = [(w / 2 + dx * L / 2) / w, (h / 2 + dy * L / 2) / h];
+  const xc = [p1[0] - p0[0], p1[1] - p0[1]];
+  const yc = [-dy * L / w, dx * L / h];
+  const o = [p0[0] - yc[0] / 2, p0[1] - yc[1] / 2];
+  return { type: 'GRADIENT_LINEAR', gradientStops: st,
+    gradientTransform: inverter([[xc[0], yc[0], o[0]], [xc[1], yc[1], o[1]]]) };
+}
+
+function gradienteRadial(partes, w, h) {
+  let cfg = '';
+  if (/^(circle|ellipse|closest|farthest|at\s|-?[\d.]+(px|%))/.test(partes[0]) || partes[0].startsWith('in ')) {
+    cfg = partes[0].replace(/\bin\s+\S+(\s+\S+)?/, '').trim(); partes = partes.slice(1);
+  }
+  const [forma, pos] = cfg.split(/\bat\b/).map(s => (s || '').trim());
+  const [cx, cy] = pos ? lerPosicao(pos, w, h) : [w / 2, h / 2];
+  const lados = { closest: [Math.min(cx, w - cx), Math.min(cy, h - cy)],
+                  farthest: [Math.max(cx, w - cx), Math.max(cy, h - cy)] };
+  const circ = /circle/.test(forma) || (/^-?[\d.]+px$/.test(forma.split(/\s+/)[0]) && forma.split(/\s+/).filter(t => /\d/.test(t)).length === 1);
+  const medidas = forma.split(/\s+/).filter(t => /^-?[\d.]+(px|%)$/.test(t));
+  let rx, ry;
+  if (medidas.length) {
+    rx = medidas[0].endsWith('%') ? px(medidas[0]) / 100 * w : px(medidas[0]);
+    ry = medidas[1] ? (medidas[1].endsWith('%') ? px(medidas[1]) / 100 * h : px(medidas[1])) : rx;
+  } else {
+    const tipo = /closest-side/.test(forma) ? 'cs' : /farthest-side/.test(forma) ? 'fs' : /closest-corner/.test(forma) ? 'cc' : 'fc';
+    const [lx, ly] = lados[tipo[0] === 'c' ? 'closest' : 'farthest'];
+    if (circ) {
+      const cantos = [[0, 0], [w, 0], [0, h], [w, h]].map(([x, y]) => Math.hypot(x - cx, y - cy));
+      rx = ry = tipo === 'cs' ? Math.min(lx, ly) : tipo === 'fs' ? Math.max(lx, ly)
+        : tipo === 'cc' ? Math.min(...cantos) : Math.max(...cantos);
+    } else {
+      const k = tipo.endsWith('c') ? Math.SQRT2 : 1;
+      rx = lx * k; ry = ly * k;
+    }
+  }
+  rx = Math.max(rx, 0.01); ry = Math.max(ry, 0.01);
+  const st = paradas(partes, rx);
+  if (!st) return null;
+  const xc = [2 * rx / w, 0], yc = [0, 2 * ry / h];
+  const o = [cx / w - xc[0] / 2, cy / h - yc[1] / 2];
+  return { type: 'GRADIENT_RADIAL', gradientStops: st,
+    gradientTransform: inverter([[xc[0], yc[0], o[0]], [xc[1], yc[1], o[1]]]) };
+}
+
+// "linear-gradient(...)" -> pintura do Figma, ou null se não dá para traduzir
+function gradiente(str, w, h) {
+  const m = str.match(/^([a-z-]+)\((.*)\)$/s);
+  if (!m) return null;
+  const partes = dividir(m[2]);
+  if (m[1] === 'linear-gradient') return gradienteLinear(partes, w, h);
+  if (m[1] === 'radial-gradient') return gradienteRadial(partes, w, h);
+  return null; // conic, repeating-*: viram imagem
+}
+
+const urlDe = s => { const m = s.match(/^url\(\s*["']?(.*?)["']?\s*\)$/s); return m ? m[1] : null; };
+
+// Fundo do elemento. Devolve { fills, raster } — raster=true quando o fundo
+// precisa ser desenhado como imagem (padrões, repetições, gradiente cônico).
+function fundo(cs, w, h, reg) {
+  const fills = [];
+  const bg = cor(cs.backgroundColor);
+  if (visivel(bg)) fills.push(solido(bg));
+  const img = cs.backgroundImage;
+  if (!img || img === 'none') return { fills, raster: false };
+  const camadas = dividir(img), tamanhos = dividir(cs.backgroundSize), repet = dividir(cs.backgroundRepeat);
+  const sobre = [];
+  for (let i = 0; i < camadas.length; i++) {
+    const c = camadas[i];
+    if (c === 'none') continue;
+    const tam = (tamanhos[i % tamanhos.length] || 'auto').trim();
+    const rep = (repet[i % repet.length] || 'repeat').trim();
+    const cobre = /^(auto|auto auto|100% 100%)$/.test(tam);
+    const u = urlDe(c);
+    if (u) {
+      const modo = tam === 'cover' ? 'FILL' : tam === 'contain' && /no-repeat/.test(rep) ? 'FIT' : tam === '100% 100%' ? 'CROP' : null;
+      if (!modo) return { fills, raster: true };
+      sobre.push({ type: 'IMAGE', key: reg.imagem(u), mode: modo });
+      continue;
+    }
+    const g = cobre ? gradiente(c, w, h) : null;
+    if (!g) return { fills, raster: true };
+    sobre.push(g);
+  }
+  return { fills: fills.concat(sobre.reverse()), raster: false };
+}
+
+// ---------------------------------------------------------------- borda, cantos, sombras
+
+const LADOS = ['Top', 'Right', 'Bottom', 'Left'];
+
+function borda(cs) {
+  const lados = LADOS.map(L => {
+    const estilo = cs['border' + L + 'Style'];
+    const w = estilo === 'none' || estilo === 'hidden' ? 0 : px(cs['border' + L + 'Width']);
+    return { w, c: cor(cs['border' + L + 'Color']), estilo };
+  });
+  const ativos = lados.filter(l => l.w > 0 && visivel(l.c));
+  if (!ativos.length) return null;
+  const mesmaCor = ativos.every(l => l.c.r === ativos[0].c.r && l.c.g === ativos[0].c.g && l.c.b === ativos[0].c.b && l.c.a === ativos[0].c.a);
+  const w = l => (l.w > 0 && visivel(l.c) ? l.w : 0);
+  if (!mesmaCor) return { lados: lados.map(l => (w(l) ? l : null)) };
+  const e = ativos[0].estilo, bw = ativos[0].w;
+  const dash = e === 'dashed' ? [bw * 3, bw * 2] : e === 'dotted' ? [bw, bw] : null;
+  return { paint: solido(ativos[0].c), top: w(lados[0]), right: w(lados[1]), bottom: w(lados[2]), left: w(lados[3]), dash };
+}
+
+function cantos(cs, w, h) {
+  const r = ['TopLeft', 'TopRight', 'BottomRight', 'BottomLeft'].map(k => {
+    const v = (cs['border' + k + 'Radius'] || '0').split(/\s+/)[0];
+    return v.endsWith('%') ? Math.min(w, h) * px(v) / 100 : px(v);
+  });
+  if (!r.some(Boolean)) return null;
+  const f = Math.min(1, w / (r[0] + r[1] || 1), w / (r[3] + r[2] || 1), h / (r[0] + r[3] || 1), h / (r[1] + r[2] || 1));
+  return r.map(v => v * f);
+}
+
+function sombras(str, texto) {
+  if (!str || str === 'none') return [];
+  return dividir(str).map(p => {
+    const inset = /\binset\b/.test(p);
+    const { c, resto } = separarCor(p.replace(/\binset\b/, ''));
+    const n = resto.split(/\s+/).filter(Boolean).map(px);
+    if (!c || n.length < 2) return null;
+    const fx = { type: inset ? 'INNER_SHADOW' : 'DROP_SHADOW', color: { r: c.r, g: c.g, b: c.b, a: c.a },
+      offset: { x: n[0], y: n[1] }, radius: n[2] || 0, spread: texto ? 0 : n[3] || 0, visible: true, blendMode: 'NORMAL' };
+    if (!inset) fx.showShadowBehindNode = false;
+    return fx;
+  }).filter(Boolean).reverse();
+}
+
+function filtros(cs) {
+  const fx = [];
+  const f = cs.filter || '', b = cs.backdropFilter || cs.webkitBackdropFilter || '';
+  let m = f.match(/blur\(([\d.]+)px\)/);
+  if (m && +m[1]) fx.push({ type: 'LAYER_BLUR', radius: +m[1] * 2, visible: true });
+  for (const d of f.matchAll(/drop-shadow\(((?:[^()]|\([^)]*\))*)\)/g)) fx.push(...sombras(d[1], true));
+  m = b.match(/blur\(([\d.]+)px\)/);
+  if (m && +m[1]) fx.push({ type: 'BACKGROUND_BLUR', radius: +m[1] * 2, visible: true });
+  return fx;
+}
+
+const MISTURAS = { multiply: 'MULTIPLY', screen: 'SCREEN', overlay: 'OVERLAY', darken: 'DARKEN', lighten: 'LIGHTEN',
+  'color-dodge': 'COLOR_DODGE', 'color-burn': 'COLOR_BURN', 'hard-light': 'HARD_LIGHT', 'soft-light': 'SOFT_LIGHT',
+  difference: 'DIFFERENCE', exclusion: 'EXCLUSION', hue: 'HUE', saturation: 'SATURATION', color: 'COLOR', luminosity: 'LUMINOSITY' };
+const mistura = cs => MISTURAS[cs.mixBlendMode] || null;
+
+// ---------------------------------------------------------------- imagens
+
+function bytesDeDataURL(u) {
+  const [cab, dados] = u.split(',');
+  if (/;base64/i.test(cab)) {
+    const bin = atob(dados);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  return new TextEncoder().encode(decodeURIComponent(dados));
+}
+
+async function blobDe(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.blob();
+}
+
+const dataURLDe = blob => new Promise((ok, erro) => {
+  const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = erro; fr.readAsDataURL(blob);
+});
+
+function carregarImg(src) {
+  return new Promise((ok, erro) => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => ok(im); im.onerror = () => erro(new Error('imagem não carregou'));
+    im.src = src;
+  });
+}
+
+const canvasParaBytes = cv => new Promise((ok, erro) => cv.toBlob(async b => {
+  if (!b) return erro(new Error('canvas vazio'));
+  ok(new Uint8Array(await b.arrayBuffer()));
+}, 'image/png'));
+
+// Desenha uma fonte de imagem num canvas e devolve PNG (limite do Figma: 4096 px).
+async function paraPNG(fonte, w, h) {
+  const k = Math.min(1, 4096 / Math.max(w, h));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+  cv.getContext('2d').drawImage(fonte, 0, 0, cv.width, cv.height);
+  return canvasParaBytes(cv);
+}
+
+// Baixa qualquer imagem e devolve bytes que o Figma aceita (PNG, JPG ou GIF).
+async function bytesDeImagem(url) {
+  const blob = await blobDe(url);
+  const tipo = blob.type;
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const ok = /^image\/(png|jpe?g|gif)$/.test(tipo) || (!tipo && (bytes[0] === 0x89 || bytes[0] === 0xff || bytes[0] === 0x47));
+  if (ok) {
+    const im = await carregarImg(URL.createObjectURL(blob)).catch(() => null);
+    if (!im || Math.max(im.naturalWidth, im.naturalHeight) <= 4096) return bytes;
+    return paraPNG(im, im.naturalWidth, im.naturalHeight);
+  }
+  const im = await carregarImg(URL.createObjectURL(blob));
+  const w = im.naturalWidth || 512, h = im.naturalHeight || 512;
+  const k = /svg/.test(tipo) ? 2 : 1; // SVG usado como imagem: desenha em 2x
+  return paraPNG(im, w * k, h * k);
+}
+
+// Troca url(...) dentro de um CSS por data: URLs (para desenhar via SVG).
+async function embutirURLs(css) {
+  const urls = [...css.matchAll(/url\(\s*["']?(.*?)["']?\s*\)/g)].map(m => m[1]).filter(u => !u.startsWith('data:'));
+  for (const u of new Set(urls)) {
+    try { css = css.split(u).join(await dataURLDe(await blobDe(u))); } catch (e) { /* fica sem a imagem */ }
+  }
+  return css;
+}
+
+// Desenha o fundo de um elemento (cor + todas as camadas) como PNG em 2x,
+// usando um SVG com foreignObject — é o "print" do que o Figma não sabe fazer.
+async function rasterizarFundo(cs, w, h) {
+  const props = ['background-color', 'background-image', 'background-size', 'background-position',
+    'background-repeat', 'background-blend-mode', 'background-origin', 'background-clip'];
+  let css = props.map(p => p + ':' + cs.getPropertyValue(p)).join(';');
+  css = await embutirURLs(css);
+  const esc = css.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%">` +
+    `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${h}px;${esc}"></div></foreignObject></svg>`;
+  const im = await carregarImg('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
+  return paraPNG(im, w * 2, h * 2);
+}
+
+// ---- medir.js
+// O "medidor": percorre o documento renderizado no iframe e monta a árvore
+// F/R/T/S que o code.js desenha. Usa getBoundingClientRect, getComputedStyle
+// e Range (para medir cada letra e reproduzir as quebras de linha exatas).
+
+const IGNORAR = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'TITLE', 'HEAD', 'TEMPLATE', 'NOSCRIPT', 'BASE']);
+const ATOMICOS = new Set(['IMG', 'SVG', 'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'CANVAS', 'VIDEO', 'IFRAME', 'OBJECT', 'EMBED', 'PICTURE', 'AUDIO', 'METER', 'PROGRESS']);
+const CAIXA_TEXTO = { center: 'CENTER', right: 'RIGHT', end: 'RIGHT', justify: 'JUSTIFIED', '-webkit-center': 'CENTER' };
+const CASOS = { uppercase: 'UPPER', lowercase: 'LOWER', capitalize: 'TITLE' };
+
+class Registro {
+  constructor() { this.urls = new Map(); this.bytes = {}; this.n = 0; }
+  imagem(url) {
+    if (!this.urls.has(url)) this.urls.set(url, 'IMG' + (++this.n));
+    return this.urls.get(url);
+  }
+  dados(u8) { const k = 'RAW' + (++this.n); this.bytes[k] = u8; return k; }
+  async resolver(progresso) {
+    const lista = [...this.urls];
+    let feitos = 0;
+    await Promise.all(lista.map(async ([url, k]) => {
+      try { this.bytes[k] = await bytesDeImagem(url); } catch (e) { console.warn('imagem falhou', url, e); }
+      progresso && progresso('Baixando imagens… ' + (++feitos) + '/' + lista.length);
+    }));
+    return this.bytes;
+  }
+}
+
+function nomeDe(el) {
+  const tag = el.tagName.toLowerCase();
+  if (el.id) return tag + '#' + el.id;
+  const cls = typeof el.className === 'string' && el.className.trim().split(/\s+/)[0];
+  return cls && !cls.startsWith('__h2f') ? tag + '.' + cls : tag;
+}
+
+function criarMedidor(doc, win, opts) {
+  const reg = new Registro();
+  const css = el => win.getComputedStyle(el);
+  const alturas = new Map();
+  const rotacoes = new Map();
+
+  // ------------------------------------------------------------ preparação
+
+  function injetarEstilo() {
+    const st = doc.createElement('style');
+    st.textContent = '*,*::before,*::after{transition:none!important;caret-color:transparent!important}' +
+      'html{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important}' +
+      '[data-h2f-b]::before{content:none!important}[data-h2f-a]::after{content:none!important}';
+    (doc.head || doc.documentElement).appendChild(st);
+  }
+
+  // ::before e ::after não têm getBoundingClientRect: viram <span> de verdade,
+  // com todo o estilo calculado copiado.
+  function materializarPseudos() {
+    for (const el of [...doc.body.querySelectorAll('*'), doc.body]) {
+      if (IGNORAR.has(el.tagName) || ATOMICOS.has(el.tagName) || el.namespaceURI !== 'http://www.w3.org/1999/xhtml') continue;
+      for (const [pseudo, attr] of [['::before', 'data-h2f-b'], ['::after', 'data-h2f-a']]) {
+        const cs = win.getComputedStyle(el, pseudo);
+        const content = cs.content;
+        if (!content || content === 'none' || content === 'normal' || cs.display === 'none') continue;
+        const span = doc.createElement('span');
+        span.className = '__h2f-pseudo';
+        for (let i = 0; i < cs.length; i++) {
+          const p = cs[i];
+          if (p === 'content' || p.startsWith('--')) continue;
+          span.style.setProperty(p, cs.getPropertyValue(p));
+        }
+        let texto = '';
+        for (const parte of dividir(content, ' ')) {
+          if (/^["']/.test(parte)) texto += parte.slice(1, -1).replace(/\\([0-9a-f]{1,6})\s?/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/\\(.)/g, '$1');
+          else if (/^attr\(/.test(parte)) texto += el.getAttribute(parte.slice(5, -1).trim()) || '';
+          else if (/^url\(/.test(parte)) {
+            const img = doc.createElement('img'); img.src = urlDe(parte); span.appendChild(img);
+          }
+        }
+        if (texto) span.appendChild(doc.createTextNode(texto));
+        if (pseudo === '::before') el.insertBefore(span, el.firstChild); else el.appendChild(span);
+        el.setAttribute(attr, '');
+      }
+    }
+  }
+
+  // Tira a rotação mantendo o centro e a escala (uniforme); guarda o ângulo.
+  function normalizarTransformacoes() {
+    for (const el of doc.querySelectorAll('*')) {
+      if (!(el instanceof win.HTMLElement)) continue;
+      const cs = css(el);
+      let ang = 0;
+      if (cs.rotate && cs.rotate !== 'none') {
+        const a = angulo(cs.rotate.split(/\s+/).pop());
+        if (a) ang += a;
+        el.style.setProperty('rotate', 'none', 'important');
+      }
+      const t = cs.transform;
+      if (t && t !== 'none') {
+        const v = t.match(/\((.*)\)/)[1].split(',').map(Number);
+        const [a, b, c, d, e, f] = v.length === 16 ? [v[0], v[1], v[4], v[5], v[12], v[13]] : v;
+        const rot = Math.atan2(b, a) * 180 / Math.PI;
+        if (Math.abs(rot) > 0.01) {
+          const s = Math.hypot(a, b);
+          const [ox, oy] = cs.transformOrigin.split(' ').map(px);
+          const vx = el.offsetWidth / 2 - ox, vy = el.offsetHeight / 2 - oy;
+          // centro final = o + A·v + t  ->  com matriz s·I: t' = A·v + t − s·v
+          const tx = a * vx + c * vy + e - s * vx, ty = b * vx + d * vy + f - s * vy;
+          el.style.setProperty('transform', `matrix(${s}, 0, 0, ${s}, ${tx}, ${ty})`, 'important');
+          ang += rot;
+        }
+      }
+      if (Math.abs(ang) > 0.01) rotacoes.set(el, ang);
+    }
+  }
+
+  // ------------------------------------------------------------ texto
+
+  function alturaNormal(cs) {
+    const k = cs.fontFamily + '|' + cs.fontSize + '|' + cs.fontWeight + '|' + cs.fontStyle;
+    if (alturas.has(k)) return alturas.get(k);
+    const s = doc.createElement('div');
+    s.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;line-height:normal;display:block;padding:0;border:0;margin:0';
+    s.style.fontFamily = cs.fontFamily; s.style.fontSize = cs.fontSize;
+    s.style.fontWeight = cs.fontWeight; s.style.fontStyle = cs.fontStyle;
+    s.textContent = 'Hg';
+    doc.body.appendChild(s);
+    const h = s.getBoundingClientRect().height;
+    s.remove();
+    alturas.set(k, h);
+    return h;
+  }
+
+  // Escala visual acumulada (transform: scale) do elemento: tamanho na tela / tamanho de layout.
+  const escalas = new Map();
+  function escalaDe(el) {
+    if (!el || !el.offsetWidth) return 1;
+    if (!escalas.has(el)) {
+      const k = el.getBoundingClientRect().width / el.offsetWidth;
+      escalas.set(el, Math.abs(k - 1) < 0.01 ? 1 : k);
+    }
+    return escalas.get(el);
+  }
+
+  const familias = cs => cs.fontFamily.split(',').map(f => f.replace(/["']/g, '').trim()).filter(Boolean);
+
+  function estiloDoTexto(el, bloco) {
+    const cs = css(el);
+    let deco = '';
+    for (let e = el; e && e !== bloco.parentElement; e = e.parentElement) {
+      deco += ' ' + css(e).textDecorationLine;
+      if (e === bloco) break;
+    }
+    const preenchimento = cor(cs.webkitTextFillColor && cs.webkitTextFillColor !== cs.color ? cs.webkitTextFillColor : cs.color);
+    const a = el.closest('a[href]');
+    const k = escalaDe(bloco);
+    return {
+      fam: familias(cs), wt: +cs.fontWeight || 400, it: /italic|oblique/.test(cs.fontStyle),
+      size: px(cs.fontSize) * k, cor: preenchimento,
+      ls: (cs.letterSpacing === 'normal' ? 0 : px(cs.letterSpacing)) * k,
+      lh: (cs.lineHeight === 'normal' ? alturaNormal(cs) : px(cs.lineHeight)) * k,
+      tc: cs.fontVariantCaps === 'small-caps' ? 'SMALL_CAPS' : CASOS[cs.textTransform] || null,
+      td: /line-through/.test(deco) ? 'STRIKETHROUGH' : /underline/.test(deco) ? 'UNDERLINE' : null,
+      href: a && bloco.contains(a) ? a.href : null,
+      rtl: cs.direction === 'rtl', ws: cs.whiteSpace, vis: cs.visibility === 'visible',
+    };
+  }
+
+  // Um "trecho" é uma sequência de nós de texto e elementos inline que vira
+  // UMA camada de texto. Mede letra por letra para saber onde cada linha quebra.
+  function textoDoTrecho(itens, bloco, base, clipTexto, saida) {
+    const segs = [];
+    const linhas = [];
+    let pendente = null, espaco = null, folgaAntes = 0, anterior = null, inicioLinha = true, quebrou = false;
+    const range = doc.createRange();
+    const blocoCs = css(bloco);
+    const al = CAIXA_TEXTO[blocoCs.textAlign] || 'LEFT';
+    const exato = opts.quebras && al !== 'JUSTIFIED';
+
+    const emitir = (ch, st) => {
+      const ult = segs[segs.length - 1];
+      if (ult && ult.st === st) ult.s += ch; else segs.push({ s: ch, st });
+    };
+    // Margem/padding de elementos inline não existe no texto do Figma: vira
+    // espaçamento extra na última letra antes do vão.
+    const alargarUltimo = (extra) => {
+      const ult = segs[segs.length - 1];
+      const chars = [...ult.s], ch = chars.pop();
+      ult.s = chars.join('');
+      if (!ult.s) segs.pop();
+      segs.push({ s: ch, st: { ...ult.st, ls: ult.st.ls + extra } });
+    };
+
+    const visitar = (no) => {
+      if (no.nodeType === 3) return letras(no);
+      if (no.nodeType !== 1) return;
+      if (no.tagName === 'BR') {
+        if (segs.length) emitir('\n', segs[segs.length - 1].st);
+        pendente = null; anterior = null; inicioLinha = true;
+        return;
+      }
+      if (IGNORAR.has(no.tagName) || css(no).display === 'none') return;
+      decorarInline(no, base, saida);
+      for (const c of no.childNodes) visitar(c);
+    };
+
+    const letras = (tn) => {
+      const st = estiloDoTexto(tn.parentElement, bloco);
+      if (!st.vis) return;
+      const colapsa = !/^(pre|pre-wrap|break-spaces)$/.test(st.ws);
+      const mantemQuebra = !colapsa || st.ws === 'pre-line';
+      const d = tn.data;
+      for (let i = 0; i < d.length; i++) {
+        let ch = d[i];
+        const cc = d.charCodeAt(i);
+        const dupla = cc >= 0xd800 && cc <= 0xdbff;
+        if (dupla) ch = d.slice(i, i + 2);
+        if (ch === '\n' && mantemQuebra) {
+          emitir('\n', st); pendente = null; anterior = null; inicioLinha = true; continue;
+        }
+        if (colapsa && /\s/.test(ch)) {
+          if (!inicioLinha && !pendente) {
+            pendente = st;
+            range.setStart(tn, i); range.setEnd(tn, i + 1);
+            const re = range.getClientRects()[0];
+            espaco = re && re.width > 0 ? re : null;
+            folgaAntes = espaco && anterior && !st.rtl && al !== 'JUSTIFIED' && Math.abs(espaco.top - anterior.top) < 1
+              ? espaco.left - anterior.right : 0;
+          }
+          continue;
+        }
+        range.setStart(tn, i); range.setEnd(tn, i + ch.length);
+        if (dupla) i++;
+        const r = range.getClientRects()[0];
+        if (!r || (r.width === 0 && r.height === 0)) continue;
+        let novaLinha = false;
+        if (anterior) {
+          const voltou = st.rtl ? r.right > anterior.right + 0.5 : r.left < anterior.left - 0.5;
+          if (voltou && r.top > anterior.top + 1) {
+            novaLinha = quebrou = true;
+            if (exato) { emitir('\n', pendente || st); pendente = null; }
+            linhas.push({ top: r.top, h: r.height, lh: st.lh, l: r.left, r: r.right });
+          }
+        } else if (!linhas.length || inicioLinha) {
+          linhas.push({ top: r.top, h: r.height, lh: st.lh, l: r.left, r: r.right });
+        }
+        const folga = anterior && !novaLinha && !st.rtl && al !== 'JUSTIFIED'
+          ? r.left - (pendente && espaco ? espaco.right : anterior.right) : 0;
+        if (pendente) {
+          if (folgaAntes > 1 && segs.length) alargarUltimo(folgaAntes);
+          emitir(' ', pendente); pendente = null;
+        }
+        folgaAntes = 0;
+        if (folga > 1 && segs.length) alargarUltimo(folga);
+        emitir(ch, st);
+        const L = linhas[linhas.length - 1];
+        L.l = Math.min(L.l, r.left); L.r = Math.max(L.r, r.right);
+        anterior = r; inicioLinha = false;
+      }
+    };
+
+    for (const it of itens) visitar(it);
+    range.detach && range.detach();
+    while (segs.length && /^\s*$/.test(segs[segs.length - 1].s)) segs.pop();
+    if (!segs.length || !linhas.length) return;
+    segs[segs.length - 1].s = segs[segs.length - 1].s.replace(/\s+$/, '');
+
+    const x0 = Math.min(...linhas.map(l => l.l)), x1 = Math.max(...linhas.map(l => l.r));
+    const p = linhas[0];
+    const y = p.top - (p.lh - p.h) / 2 - base.y;
+    const no = { t: 'T', al, y, segs: [] };
+    const conteudo = caixaConteudo(bloco);
+    if (exato || !quebrou) {
+      no.auto = 'WH';
+      if (al === 'CENTER') { no.ax = 'c'; no.x = (x0 + x1) / 2 - base.x; }
+      else if (al === 'RIGHT') { no.ax = 'r'; no.x = x1 - base.x; }
+      else { no.ax = 'l'; no.x = x0 - base.x; }
+      if (al === 'JUSTIFIED') no.al = 'LEFT';
+    } else {
+      no.auto = 'H'; no.ax = 'l';
+      no.x = conteudo.left - base.x; no.w = conteudo.right - conteudo.left + 1;
+    }
+    const w = x1 - x0, h = linhas[linhas.length - 1].top + linhas[linhas.length - 1].lh - p.top;
+    for (const sg of segs) {
+      const st = sg.st;
+      let fill = visivel(st.cor) ? solido(st.cor) : null;
+      if (!fill && clipTexto) fill = gradiente(dividir(clipTexto.backgroundImage)[0] || '', w, h);
+      no.segs.push({ s: sg.s, fam: st.fam, wt: st.wt, it: st.it, size: st.size, fill: fill || solido({ r: 0, g: 0, b: 0, a: 0 }),
+        ls: st.ls, lh: st.lh, tc: st.tc, td: st.td, href: st.href });
+    }
+    const tcs = css(itens[0].nodeType === 1 ? itens[0] : itens[0].parentElement);
+    const sh = sombras(tcs.textShadow, true);
+    if (sh.length) no.fx = sh;
+    const sw = px(tcs.webkitTextStrokeWidth);
+    if (sw > 0) no.tstroke = { paint: solido(cor(tcs.webkitTextStrokeColor)), w: sw };
+    saida.push({ no, grupo: 0, z: 0 });
+  }
+
+  // Fundo/borda de <span>, <mark>, <code> etc. dentro do texto: um retângulo
+  // por linha, atrás da camada de texto.
+  function decorarInline(el, base, saida) {
+    const cs = css(el);
+    const bg = fundo(cs, 1, 1, reg), bd = borda(cs), sh = sombras(cs.boxShadow);
+    if (!bg.fills.length && !bd && !sh.length) return;
+    for (const r of el.getClientRects()) {
+      if (r.width < 0.5 || r.height < 0.5) continue;
+      const no = { t: 'R', n: nomeDe(el), x: r.left - base.x, y: r.top - base.y, w: r.width, h: r.height,
+        fills: fundo(cs, r.width, r.height, reg).fills, rad: cantos(cs, r.width, r.height) };
+      if (bd && bd.paint) no.stroke = bd;
+      if (sh.length) no.fx = sh;
+      saida.push({ no, grupo: 0, z: 0 });
+    }
+  }
+
+  function caixaConteudo(el) {
+    const r = el.getBoundingClientRect(), cs = css(el);
+    return {
+      left: r.left + px(cs.borderLeftWidth) + px(cs.paddingLeft),
+      right: r.right - px(cs.borderRightWidth) - px(cs.paddingRight),
+      top: r.top + px(cs.borderTopWidth) + px(cs.paddingTop),
+    };
+  }
+
+  // ------------------------------------------------------------ filhos
+
+  function inlineDeTexto(el) {
+    if (el.nodeType !== 1) return true;
+    if (el.tagName === 'BR') return true;
+    if (IGNORAR.has(el.tagName)) return true;
+    if (ATOMICOS.has(el.tagName) || el.namespaceURI !== 'http://www.w3.org/1999/xhtml') return false;
+    const d = css(el).display;
+    if (d === 'none') return true;
+    if (d !== 'inline' && d !== 'contents') return false;
+    for (const c of el.children) if (!inlineDeTexto(c)) return false;
+    return true;
+  }
+
+  // Lista "achatada" de filhos: display:contents e inlines que contêm blocos
+  // são transparentes.
+  function expandir(el) {
+    const out = [];
+    for (const c of el.childNodes) {
+      if (c.nodeType === 3) { out.push(c); continue; }
+      if (c.nodeType !== 1 || IGNORAR.has(c.tagName)) continue;
+      const d = css(c).display;
+      if (d === 'none') continue;
+      if (d === 'contents' || (d === 'inline' && !inlineDeTexto(c) && !ATOMICOS.has(c.tagName))) out.push(...expandir(c));
+      else out.push(c);
+    }
+    return out;
+  }
+
+  function chaveZ(cs) {
+    const pos = cs.position !== 'static';
+    const z = cs.zIndex === 'auto' ? 0 : +cs.zIndex;
+    if (!pos) return { grupo: cs.float !== 'none' ? 0.5 : 0, z: 0 };
+    return z < 0 ? { grupo: -1, z } : z === 0 ? { grupo: 1, z: 0 } : { grupo: 2, z };
+  }
+
+  async function filhos(el, base, clipTexto) {
+    const saida = [];
+    let trecho = [];
+    const fechar = () => {
+      if (trecho.length && trecho.some(n => (n.nodeType === 3 ? /\S/.test(n.data) : true))) textoDoTrecho(trecho, el, base, clipTexto, saida);
+      trecho = [];
+    };
+    for (const c of expandir(el)) {
+      if (c.nodeType === 3 || inlineDeTexto(c)) { trecho.push(c); continue; }
+      fechar();
+      const no = await elemento(c, base, clipTexto);
+      if (no) saida.push({ no, ...chaveZ(css(c)) });
+    }
+    fechar();
+    return saida.map((s, i) => ({ ...s, i })).sort((a, b) => a.grupo - b.grupo || a.z - b.z || a.i - b.i).map(s => s.no);
+  }
+
+  // ------------------------------------------------------------ elementos
+
+  function caixa(el, base) {
+    const r = el.getBoundingClientRect();
+    const o = { x: r.left - base.x, y: r.top - base.y, w: r.width, h: r.height, n: nomeDe(el) };
+    const ang = rotacoes.get(el);
+    if (ang) o.r = ang; // mesmo sentido do CSS: a matriz em posicionar() usa y para baixo
+    return { o, r };
+  }
+
+  function estiloDeCaixa(o, cs, el) {
+    const bd = borda(cs);
+    if (bd && bd.paint) {
+      o.stroke = bd;
+      // tabela com border-collapse: a caixa da célula vai até o meio da linha compartilhada
+      if ((el.tagName === 'TD' || el.tagName === 'TH') && el.closest('table') && css(el.closest('table')).borderCollapse === 'collapse') bd.align = 'CENTER';
+    }
+    o.rad = cantos(cs, o.w, o.h);
+    const fx = sombras(cs.boxShadow).concat(filtros(cs));
+    if (fx.length) o.fx = fx;
+    if (+cs.opacity < 1) o.o = +cs.opacity;
+    const bl = mistura(cs);
+    if (bl) o.blend = bl;
+    return bd && bd.lados ? bd.lados : null;
+  }
+
+  function ladosDeBorda(lados, o) {
+    const [t, r, b, l] = lados;
+    const out = [];
+    const ret = (x, y, w, h, lado) => out.push({ t: 'R', n: 'borda-' + lado, x, y, w, h, fills: [solido(lado === 'top' ? t.c : lado === 'right' ? r.c : lado === 'bottom' ? b.c : l.c)] });
+    if (t) ret(0, 0, o.w, t.w, 'top');
+    if (b) ret(0, o.h - b.w, o.w, b.w, 'bottom');
+    if (l) ret(0, 0, l.w, o.h, 'left');
+    if (r) ret(o.w - r.w, 0, r.w, o.h, 'right');
+    return out;
+  }
+
+  async function preencherFundo(o, cs) {
+    const bg = fundo(cs, o.w, o.h, reg);
+    if (!bg.raster) return bg.fills;
+    try { return [{ type: 'IMAGE', key: reg.dados(await rasterizarFundo(cs, o.w, o.h)), mode: 'FILL' }]; }
+    catch (e) { return bg.fills.slice(0, 1); }
+  }
+
+  const MODOS_IMG = { cover: 'FILL', contain: 'FIT', 'scale-down': 'FIT', none: 'FILL', fill: 'CROP' };
+
+  async function imagem(el, o, cs) {
+    const src = el.currentSrc || el.src;
+    if (!src) return { t: 'R', ...o, fills: [] };
+    const semCaixa = !borda(cs) && !cantos(cs, o.w, o.h) && cs.boxShadow === 'none' && /^(fill|contain)$/.test(cs.objectFit) &&
+      !visivel(cor(cs.backgroundColor)) && !px(cs.paddingLeft) && !px(cs.paddingTop);
+    if (/^data:image\/svg|\.svg(\?|#|$)/i.test(src) && opts.svgVetor && semCaixa) {
+      try {
+        const txt = await (await fetch(src)).text();
+        const d = new DOMParser().parseFromString(txt, 'image/svg+xml').documentElement;
+        if (d.tagName.toLowerCase() === 'svg') {
+          d.setAttribute('width', o.w); d.setAttribute('height', o.h);
+          if (!d.getAttribute('preserveAspectRatio') && cs.objectFit === 'fill') d.setAttribute('preserveAspectRatio', 'none');
+          return { t: 'S', ...o, svg: new XMLSerializer().serializeToString(d) };
+        }
+      } catch (e) { /* cai para imagem */ }
+    }
+    const fills = await preencherFundo(o, cs);
+    fills.push({ type: 'IMAGE', key: reg.imagem(src), mode: MODOS_IMG[cs.objectFit] || 'CROP' });
+    const no = { t: 'R', ...o, fills, n: el.alt || o.n };
+    estiloDeCaixa(no, cs, el);
+    return no;
+  }
+
+  const SVG_PROPS = ['fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-linecap',
+    'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit', 'opacity', 'stop-color', 'stop-opacity',
+    'font-family', 'font-size', 'font-weight', 'text-anchor', 'dominant-baseline'];
+
+  function svg(el, o) {
+    const copia = el.cloneNode(true);
+    const orig = [el, ...el.querySelectorAll('*')], dest = [copia, ...copia.querySelectorAll('*')];
+    const remover = [];
+    for (let i = 0; i < orig.length; i++) {
+      const cs = css(orig[i]);
+      if (cs.display === 'none' && !/^(defs|symbol|clipPath|mask|linearGradient|radialGradient|pattern|marker|stop|filter)$/i.test(orig[i].tagName) && !orig[i].closest('defs,symbol,clipPath,mask,pattern,marker')) { remover.push(dest[i]); continue; }
+      if (orig[i].closest('defs,symbol,clipPath,mask,pattern,marker') && orig[i].tagName.toLowerCase() !== 'stop') continue;
+      for (const p of SVG_PROPS) {
+        const v = cs.getPropertyValue(p);
+        if (v && !(p === 'stroke-dasharray' && v === 'none')) dest[i].setAttribute(p, v);
+      }
+    }
+    remover.forEach(n => n.remove());
+    // <use href="#id">: troca pela cópia do que ele referencia
+    for (const u of copia.querySelectorAll('use')) {
+      const ref = (u.getAttribute('href') || u.getAttribute('xlink:href') || '').replace(/^#/, '');
+      const alvo = ref && doc.getElementById(ref);
+      if (!alvo) continue;
+      const g = doc.createElementNS('http://www.w3.org/2000/svg', alvo.tagName === 'symbol' ? 'svg' : 'g');
+      for (const a of ['fill', 'stroke', 'color', 'stroke-width', 'opacity']) if (u.getAttribute(a)) g.setAttribute(a, u.getAttribute(a));
+      const x = u.getAttribute('x') || 0, y = u.getAttribute('y') || 0;
+      if (alvo.tagName === 'symbol') {
+        if (alvo.getAttribute('viewBox')) g.setAttribute('viewBox', alvo.getAttribute('viewBox'));
+        g.setAttribute('x', x); g.setAttribute('y', y);
+        g.setAttribute('width', u.getAttribute('width') || '100%'); g.setAttribute('height', u.getAttribute('height') || '100%');
+        for (const c of alvo.childNodes) g.appendChild(c.cloneNode(true));
+      } else {
+        g.setAttribute('transform', `translate(${x},${y})`);
+        g.appendChild(alvo.cloneNode(true));
+      }
+      u.replaceWith(g);
+    }
+    copia.querySelectorAll('foreignObject,script').forEach(n => n.remove());
+    copia.setAttribute('width', o.w); copia.setAttribute('height', o.h);
+    if (!copia.getAttribute('viewBox')) copia.setAttribute('viewBox', `0 0 ${o.w} ${o.h}`);
+    copia.removeAttribute('style'); copia.removeAttribute('class');
+    let txt = new XMLSerializer().serializeToString(copia);
+    txt = txt.replace(/currentColor/gi, css(el).color);
+    return { t: 'S', ...o, svg: txt };
+  }
+
+  // Campo de formulário: caixa + texto do valor (ou placeholder).
+  function campo(el, o, cs, fills) {
+    const no = { t: 'F', ...o, fills, c: [] };
+    const lados = estiloDeCaixa(no, cs, el);
+    if (lados) no.c.push(...ladosDeBorda(lados, o));
+    const tipo = (el.type || '').toLowerCase();
+    if (tipo === 'checkbox' || tipo === 'radio') {
+      const azul = { r: 0, g: 0.459, b: 1, a: 1 };
+      no.fills = [solido(el.checked && tipo === 'checkbox' ? azul : { r: 1, g: 1, b: 1, a: 1 })];
+      no.stroke = { paint: solido(el.checked ? azul : { r: 0.46, g: 0.46, b: 0.46, a: 1 }), top: el.checked && tipo === 'radio' ? o.w * 0.3 : 1, right: 0, bottom: 0, left: 0 };
+      no.stroke.right = no.stroke.bottom = no.stroke.left = no.stroke.top;
+      if (el.checked && tipo === 'checkbox') no.stroke = null;
+      no.rad = tipo === 'radio' ? [o.w / 2, o.w / 2, o.w / 2, o.w / 2] : [2, 2, 2, 2];
+      if (el.checked && tipo === 'checkbox') no.c.push({ t: 'S', x: 0, y: 0, w: o.w, h: o.h,
+        svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${o.w}" height="${o.h}" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` });
+      return no;
+    }
+    let valor = el.tagName === 'SELECT' ? (el.selectedOptions[0] ? el.selectedOptions[0].text : '') : el.value;
+    let corTxt = cor(cs.color);
+    if (!valor && el.placeholder) { valor = el.placeholder; corTxt = cor(win.getComputedStyle(el, '::placeholder').color); }
+    if (tipo === 'password' && el.value) valor = '•'.repeat(el.value.length);
+    if (/^(range|color|file|hidden|image)$/.test(tipo)) return no;
+    const cb = caixaConteudo(el), r = el.getBoundingClientRect();
+    const lh = cs.lineHeight === 'normal' ? alturaNormal(cs) : px(cs.lineHeight);
+    if (valor) {
+      const area = el.tagName === 'TEXTAREA';
+      const al = CAIXA_TEXTO[cs.textAlign] || 'LEFT';
+      const t = { t: 'T', al, auto: area ? 'H' : 'WH', ax: 'l', x: cb.left - r.left,
+        y: area ? cb.top - r.top : (o.h - lh) / 2, w: cb.right - cb.left,
+        segs: [{ s: valor, fam: familias(cs), wt: +cs.fontWeight || 400, it: /italic/.test(cs.fontStyle), size: px(cs.fontSize),
+          fill: solido(corTxt || { r: 0, g: 0, b: 0, a: 1 }), ls: px(cs.letterSpacing), lh, tc: CASOS[cs.textTransform] || null }] };
+      if (!area && al === 'CENTER') { t.ax = 'c'; t.x = (cb.left + cb.right) / 2 - r.left; }
+      if (!area && al === 'RIGHT') { t.ax = 'r'; t.x = cb.right - r.left; }
+      no.c.push(t);
+    }
+    if (el.tagName === 'SELECT') no.c.push({ t: 'S', x: o.w - px(cs.paddingRight) - 14, y: (o.h - 10) / 2, w: 10, h: 10,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 3.5l3.5 3.5 3.5-3.5" fill="none" stroke="${cs.color}" stroke-width="1.5"/></svg>` });
+    return no;
+  }
+
+  function marcador(el, base, cs) {
+    if (cs.display !== 'list-item' || cs.listStyleType === 'none' || cs.listStylePosition !== 'outside') return null;
+    const mc = win.getComputedStyle(el, '::marker');
+    const tipo = cs.listStyleType;
+    let idx = 1;
+    const pai = el.parentElement;
+    if (el.hasAttribute('value')) idx = +el.getAttribute('value');
+    else {
+      idx = pai && pai.tagName === 'OL' && pai.hasAttribute('start') ? +pai.getAttribute('start') : 1;
+      for (let s = el.previousElementSibling; s; s = s.previousElementSibling) if (css(s).display === 'list-item') idx++;
+    }
+    const romano = n => [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']]
+      .reduce((s, [v, l]) => { while (n >= v) { s += l; n -= v; } return s; }, '');
+    const letra = n => String.fromCharCode(96 + ((n - 1) % 26) + 1);
+    const txt = /^["']/.test(tipo) ? tipo.slice(1, -1).trimEnd()
+      : { disc: '•', circle: '◦', square: '▪', decimal: idx + '.', 'decimal-leading-zero': String(idx).padStart(2, '0') + '.',
+          'lower-alpha': letra(idx) + '.', 'lower-latin': letra(idx) + '.', 'upper-alpha': letra(idx).toUpperCase() + '.',
+          'upper-latin': letra(idx).toUpperCase() + '.', 'lower-roman': romano(idx) + '.', 'upper-roman': romano(idx).toUpperCase() + '.' }[tipo] || '•';
+    const cb = caixaConteudo(el), r = el.getBoundingClientRect();
+    const size = px(mc.fontSize || cs.fontSize);
+    const lh = cs.lineHeight === 'normal' ? alturaNormal(cs) : px(cs.lineHeight);
+    return { t: 'T', n: 'marcador', al: 'RIGHT', auto: 'WH', ax: 'r', x: r.left - base.x - size * 0.3,
+      y: cb.top - base.y, segs: [{ s: txt, fam: familias(mc.fontFamily ? mc : cs), wt: +(mc.fontWeight || cs.fontWeight) || 400, it: false,
+        size, fill: solido(cor(mc.color || cs.color)), ls: 0, lh, tc: null }] };
+  }
+
+  async function elemento(el, base, clipTexto) {
+    const cs = css(el);
+    if (cs.display === 'none') return null;
+    const { o, r } = caixa(el, base);
+    const tag = el.tagName.toUpperCase();
+    const meu = { x: r.left, y: r.top };
+
+    if (tag === 'IMG') return imagem(el, o, cs);
+    if (tag === 'SVG' && el.namespaceURI === 'http://www.w3.org/2000/svg') {
+      const s = svg(el, o);
+      if (+cs.opacity < 1) s.o = +cs.opacity;
+      return s;
+    }
+    if (tag === 'CANVAS' || tag === 'VIDEO') {
+      const no = { t: 'R', ...o, fills: [] };
+      try {
+        const bytes = await paraPNG(el, el.width || el.videoWidth || o.w, el.height || el.videoHeight || o.h);
+        no.fills = [{ type: 'IMAGE', key: reg.dados(bytes), mode: tag === 'VIDEO' ? 'FIT' : 'CROP' }];
+      } catch (e) {
+        if (el.poster) no.fills = [{ type: 'IMAGE', key: reg.imagem(el.poster), mode: 'FILL' }];
+        else no.fills = [solido({ r: 0.1, g: 0.1, b: 0.1, a: 1 })];
+      }
+      estiloDeCaixa(no, cs, el);
+      return no;
+    }
+    if (tag === 'IFRAME' || tag === 'EMBED' || tag === 'OBJECT') {
+      return { t: 'F', ...o, fills: [solido({ r: 0.93, g: 0.93, b: 0.93, a: 1 })], c: [] };
+    }
+
+    let fills;
+    const clipaTexto = cs.webkitBackgroundClip === 'text' || cs.backgroundClip === 'text';
+    if (clipaTexto) { fills = []; clipTexto = cs; } else fills = await preencherFundo(o, cs);
+
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return campo(el, o, cs, fills);
+
+    const no = { t: 'F', ...o, fills, c: [] };
+    const lados = estiloDeCaixa(no, cs, el);
+    no.clip = /hidden|clip|auto|scroll/.test(cs.overflowX + cs.overflowY) && tag !== 'HTML' && tag !== 'BODY';
+    if (cs.visibility !== 'visible') { no.fills = []; no.stroke = null; no.fx = null; }
+
+    const mk = marcador(el, meu, cs);
+    if (mk) no.c.push(mk);
+    no.c.push(...(await filhos(el, meu, clipTexto)));
+    if (lados) no.c.push(...ladosDeBorda(lados, o));
+    return no;
+  }
+
+  // ------------------------------------------------------------ pós-processo
+
+  const temVisual = n => (n.fills && n.fills.length) || n.stroke || (n.fx && n.fx.length) || n.clip || n.r || (n.o != null && n.o < 1) || n.blend;
+
+  // Remove frames sem nada e (opcional) "achata" divs sem estilo, subindo os filhos.
+  function simplificar(n, achatar) {
+    if (n.t !== 'F') return n;
+    const novos = [];
+    for (const c of n.c) {
+      const s = simplificar(c, achatar);
+      if (!s) continue;
+      if (s.t === 'F' && !temVisual(s)) {
+        if (!s.c.length) continue;
+        if (achatar) { for (const g of s.c) novos.push({ ...g, x: g.x + s.x, y: g.y + s.y }); continue; }
+      }
+      novos.push(s);
+    }
+    n.c = novos;
+    return n;
+  }
+
+  // ------------------------------------------------------------ entrada
+
+  function raizes() {
+    const W = doc.documentElement.clientWidth;
+    const kids = [...doc.body.children].filter(k => !IGNORAR.has(k.tagName) && css(k).display !== 'none' &&
+      css(k).position !== 'fixed' && k.getBoundingClientRect().height > 0 && !k.classList.contains('__h2f-pseudo'));
+    if (opts.raiz === 'pagina') return null;
+    if (opts.raiz === 'filhos') return kids;
+    if (kids.length === 1 && kids[0].getBoundingClientRect().width < W - 1) return kids;
+    if (kids.length > 1) {
+      const r0 = kids[0].getBoundingClientRect();
+      if (r0.width < W - 1 && kids.every(k => { const r = k.getBoundingClientRect(); return Math.abs(r.width - r0.width) < 1 && Math.abs(r.height - r0.height) < 1; })) return kids;
+    }
+    return null;
+  }
+
+  async function medir(progresso) {
+    injetarEstilo();
+    materializarPseudos();
+    normalizarTransformacoes();
+    // rAF pode ficar parado em iframe fora da tela: o setTimeout garante que segue
+    await Promise.race([new Promise(ok => win.requestAnimationFrame(() => ok())), new Promise(ok => setTimeout(ok, 60))]);
+    progresso && progresso('Medindo elementos…');
+    const lista = raizes();
+    const arvores = [];
+    if (lista) {
+      for (const k of lista) {
+        const r = k.getBoundingClientRect();
+        const no = await elemento(k, { x: r.left, y: r.top }, null);
+        if (!no) continue;
+        no.x = 0; no.y = 0; delete no.r; no.clip = true;
+        if (no.t === 'F' && !no.fills.length) no.fills = [solido({ r: 1, g: 1, b: 1, a: 1 })];
+        arvores.push(no);
+      }
+    } else {
+      const html = doc.documentElement, body = doc.body;
+      const W = html.clientWidth;
+      const H = Math.max(html.scrollHeight, body.scrollHeight, html.getBoundingClientRect().height);
+      const no = await elemento(html, { x: 0, y: 0 }, null);
+      const fundoHtml = cor(css(html).backgroundColor), fundoBody = cor(css(body).backgroundColor);
+      const corPagina = visivel(fundoHtml) ? fundoHtml : visivel(fundoBody) ? fundoBody : { r: 1, g: 1, b: 1, a: 1 };
+      no.x = 0; no.y = 0; no.w = W; no.h = H; no.clip = true; delete no.r;
+      if (!no.fills.length || !visivel(fundoHtml)) no.fills = [solido(corPagina), ...no.fills.filter(f => f.type !== 'SOLID')];
+      const corpo = no.c.find(c => c.n && c.n.startsWith('body'));
+      if (corpo && !visivel(fundoHtml) && visivel(fundoBody)) corpo.fills = corpo.fills.filter(f => f.type !== 'SOLID');
+      arvores.push(no);
+    }
+    const images = await reg.resolver(progresso);
+    return arvores.map(a => simplificar(a, opts.achatar)).map(tree => ({ tree, images }));
+  }
+
+  return { medir };
+}
+
+// ---- arquivos.js
+// Leitura dos arquivos soltos no plugin. Cada arquivo vira um "trabalho":
+//   { name, kind:'html', html }            -> renderizado e medido no iframe
+//   { name, kind:'tree', tree, images }    -> já pronto para o code.js
+// Arquivos de apoio (imagens, CSS, fontes) soltos junto com um HTML são
+// trocados por blob: URLs para que o HTML os encontre.
+
+const EXT = n => (n.match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
+const DOCS = new Set(['html', 'htm', 'xhtml', 'md', 'markdown', 'txt', 'log', 'csv', 'tsv', 'json', 'pdf', 'docx']);
+const IMAGENS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico']);
+const tirarExt = n => n.replace(/\.[^.]+$/, '');
+
+function normalizar(caminho) {
+  const out = [];
+  for (const p of caminho.replace(/\\/g, '/').split('/')) {
+    if (!p || p === '.') continue;
+    if (p === '..') out.pop(); else out.push(p);
+  }
+  return out.join('/').toLowerCase();
+}
+
+const externo = u => !u || /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(u.trim());
+
+function criarAcervo(arquivos) {
+  const porCaminho = new Map(), porNome = new Map();
+  for (const { file, path } of arquivos) {
+    const url = URL.createObjectURL(file);
+    porCaminho.set(normalizar(path), { url, file });
+    const nome = file.name.toLowerCase();
+    if (!porNome.has(nome)) porNome.set(nome, { url, file });
+  }
+  return {
+    achar(ref, dir) {
+      if (externo(ref)) return null;
+      const limpo = decodeURIComponent(ref.split(/[?#]/)[0]);
+      const alvo = limpo.startsWith('/') ? normalizar(limpo) : normalizar(dir + '/' + limpo);
+      return porCaminho.get(alvo) || porNome.get(limpo.split('/').pop().toLowerCase()) || null;
+    },
+  };
+}
+
+const dirDe = p => p.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+
+function trocarURLsCSS(css, dir, acervo) {
+  return css.replace(/url\(\s*(["']?)(.*?)\1\s*\)/g, (m, q, u) => {
+    const a = acervo.achar(u, dir);
+    return a ? `url("${a.url}")` : m;
+  }).replace(/@import\s+(["'])(.*?)\1/g, (m, q, u) => {
+    const a = acervo.achar(u, dir);
+    return a ? `@import "${a.url}"` : m;
+  });
+}
+
+// Reescreve src/href/url() do HTML para os arquivos locais soltos junto.
+async function prepararHTML(html, caminho, acervo) {
+  const dir = dirDe(caminho);
+  const d = new DOMParser().parseFromString(html, 'text/html');
+  // folhas de estilo locais entram inline, com os url() resolvidos a partir da pasta do CSS
+  for (const link of d.querySelectorAll('link[rel~="stylesheet"][href]')) {
+    const href = link.getAttribute('href');
+    const a = acervo.achar(href, dir);
+    if (!a) continue;
+    const st = d.createElement('style');
+    st.textContent = trocarURLsCSS(await a.file.text(), dirDe(normalizar(dir + '/' + href.split(/[?#]/)[0])), acervo);
+    link.replaceWith(st);
+  }
+  for (const el of d.querySelectorAll('[src],[href],[poster],[srcset],[data-src]')) {
+    for (const at of ['src', 'href', 'poster', 'data-src']) {
+      const v = el.getAttribute(at);
+      const a = v && acervo.achar(v, dir);
+      if (a && !(at === 'href' && el.tagName === 'A')) el.setAttribute(at, a.url);
+    }
+    if (el.hasAttribute('data-src') && !el.getAttribute('src')) el.setAttribute('src', el.getAttribute('data-src'));
+    const ss = el.getAttribute('srcset');
+    if (ss) el.setAttribute('srcset', ss.split(',').map(p => {
+      const [u, ...r] = p.trim().split(/\s+/);
+      const a = acervo.achar(u, dir);
+      return [a ? a.url : u, ...r].join(' ');
+    }).join(', '));
+    if (el.tagName === 'IMG') el.removeAttribute('loading');
+  }
+  for (const st of d.querySelectorAll('style')) st.textContent = trocarURLsCSS(st.textContent, dir, acervo);
+  for (const el of d.querySelectorAll('[style]')) el.setAttribute('style', trocarURLsCSS(el.getAttribute('style'), dir, acervo));
+  return '<!DOCTYPE html>' + d.documentElement.outerHTML;
+}
+
+// ---------------------------------------------------------------- Markdown e texto
+
+const ESTILO_DOC = `
+  html,body{margin:0;background:#fff}
+  .doc{box-sizing:border-box;width:880px;padding:48px 56px;font:16px/1.6 Inter,"Segoe UI",Roboto,Arial,sans-serif;color:#1f2328;background:#fff}
+  .doc h1,.doc h2{border-bottom:1px solid #d1d9e0;padding-bottom:.3em}
+  .doc h1{font-size:2em;margin:0 0 16px}.doc h2{font-size:1.5em;margin:24px 0 16px}.doc h3{font-size:1.25em;margin:24px 0 16px}
+  .doc h4,.doc h5,.doc h6{font-size:1em;margin:24px 0 16px}
+  .doc p,.doc ul,.doc ol,.doc blockquote,.doc pre,.doc table{margin:0 0 16px}
+  .doc a{color:#0969da;text-decoration:none}
+  .doc code{font:85% "Roboto Mono",Consolas,monospace;background:#eff1f3;border-radius:6px;padding:.2em .4em}
+  .doc pre{background:#f6f8fa;border-radius:6px;padding:16px;overflow:hidden;white-space:pre-wrap}
+  .doc pre code{background:none;padding:0;font-size:85%}
+  .doc blockquote{color:#59636e;border-left:4px solid #d1d9e0;padding:0 16px}
+  .doc table{border-collapse:collapse}.doc th,.doc td{border:1px solid #d1d9e0;padding:6px 13px}
+  .doc th{font-weight:600;background:#f6f8fa}
+  .doc hr{border:0;height:4px;background:#d1d9e0;margin:24px 0}
+  .doc img{max-width:100%}.doc ul,.doc ol{padding-left:2em}
+`;
+
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function inlineMD(s) {
+  const codigos = [];
+  s = s.replace(/`([^`]+)`/g, (_, c) => { codigos.push(c); return '\u0000' + (codigos.length - 1) + '\u0000'; });
+  s = esc(s)
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, '<img alt="$1" src="$2">')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, '<a href="$2">$1</a>')
+    .replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_, a, b) => '<strong>' + (a || b) + '</strong>')
+    .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1<em>$2</em>')
+    .replace(/(^|[^_\w])_(?!\s)(.+?)_(?!\w)/g, '$1<em>$2</em>')
+    .replace(/~~(.+?)~~/g, '<del>$1</del>')
+    .replace(/ {2,}$/, '<br>');
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => '<code>' + esc(codigos[i]) + '</code>');
+}
+
+function markdown(md) {
+  md = md.replace(/\r\n?/g, '\n').replace(/^---\n[\s\S]*?\n---\n/, '');
+  const L = md.split('\n');
+  let out = '', i = 0;
+  const lista = (ini) => {
+    // listas com aninhamento por recuo
+    const recuo = l => l.match(/^\s*/)[0].replace(/\t/g, '    ').length;
+    const base = recuo(L[ini]);
+    const ordenada = /^\s*\d+[.)]\s/.test(L[ini]);
+    let html = ordenada ? `<ol start="${parseInt(L[ini])}">` : '<ul>';
+    let j = ini;
+    while (j < L.length) {
+      const l = L[j];
+      if (!l.trim()) {
+        const prox = L[j + 1] || '';
+        const mesmoTipo = ordenada ? /^\s*\d+[.)]\s/.test(prox) : /^\s*[-*+]\s/.test(prox);
+        if (mesmoTipo || (recuo(prox) > base && /^\s*([-*+]|\d+[.)])\s/.test(prox))) { j++; continue; }
+        break;
+      }
+      const r = recuo(l);
+      const m = l.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/);
+      if (r > base && m) { const [sub, k] = lista(j); html = html.replace(/<\/li>$/, sub + '</li>'); j = k; continue; }
+      if (r < base || !m) {
+        if (!m && r > base && html.endsWith('</li>')) { html = html.replace(/<\/li>$/, ' ' + inlineMD(l.trim()) + '</li>'); j++; continue; }
+        break;
+      }
+      let item = m[1];
+      const tarefa = item.match(/^\[( |x)\]\s+(.*)$/i);
+      if (tarefa) item = `<input type="checkbox" disabled${tarefa[1] !== ' ' ? ' checked' : ''}> ` + inlineMD(tarefa[2]);
+      else item = inlineMD(item);
+      html += '<li>' + item + '</li>';
+      j++;
+    }
+    return [html + (ordenada ? '</ol>' : '</ul>'), j];
+  };
+  while (i < L.length) {
+    const l = L[i];
+    if (!l.trim()) { i++; continue; }
+    let m;
+    if ((m = l.match(/^\s*(```|~~~)\s*(\S*)/))) {
+      const fim = m[1]; const cod = [];
+      i++;
+      while (i < L.length && !L[i].trim().startsWith(fim)) cod.push(L[i++]);
+      i++;
+      out += '<pre><code>' + esc(cod.join('\n')) + '</code></pre>';
+    } else if ((m = l.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/))) {
+      out += `<h${m[1].length}>${inlineMD(m[2])}</h${m[1].length}>`; i++;
+    } else if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(l)) {
+      out += '<hr>'; i++;
+    } else if (/^\s*>/.test(l)) {
+      const q = [];
+      while (i < L.length && /^\s*>/.test(L[i])) q.push(L[i++].replace(/^\s*>\s?/, ''));
+      out += '<blockquote>' + markdown(q.join('\n')) + '</blockquote>';
+    } else if (/^\s*([-*+]|\d+[.)])\s/.test(l)) {
+      const [h, j] = lista(i); out += h; i = j;
+    } else if (/\|/.test(l) && i + 1 < L.length && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(L[i + 1])) {
+      const cel = s => s.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+      const alin = cel(L[i + 1]).map(c => c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : 'left');
+      out += '<table><thead><tr>' + cel(l).map((c, k) => `<th style="text-align:${alin[k]}">${inlineMD(c)}</th>`).join('') + '</tr></thead><tbody>';
+      i += 2;
+      while (i < L.length && /\|/.test(L[i]) && L[i].trim()) {
+        out += '<tr>' + cel(L[i]).map((c, k) => `<td style="text-align:${alin[k] || 'left'}">${inlineMD(c)}</td>`).join('') + '</tr>'; i++;
+      }
+      out += '</tbody></table>';
+    } else if (/^\s*</.test(l)) {
+      const b = [];
+      while (i < L.length && L[i].trim()) b.push(L[i++]);
+      out += b.join('\n');
+    } else {
+      const p = [];
+      while (i < L.length && L[i].trim() && !/^(#{1,6}\s|\s*```|\s*~~~|\s*>|\s*([-*+]|\d+[.)])\s)/.test(L[i])) p.push(L[i++]);
+      out += '<p>' + p.map(inlineMD).join(' ').replace(/<br> /g, '<br>') + '</p>';
+    }
+  }
+  return out;
+}
+
+const paginaDoc = (corpo, extra = '') => `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${ESTILO_DOC}${extra}</style></head><body><div class="doc">${corpo}</div></body></html>`;
+
+function csv(texto, sep) {
+  const linhas = [];
+  let campo = '', linha = [], aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (aspas) { if (c === '"' && texto[i + 1] === '"') { campo += '"'; i++; } else if (c === '"') aspas = false; else campo += c; continue; }
+    if (c === '"') aspas = true;
+    else if (c === sep) { linha.push(campo); campo = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && texto[i + 1] === '\n') i++; linha.push(campo); linhas.push(linha); linha = []; campo = ''; }
+    else campo += c;
+  }
+  if (campo || linha.length) { linha.push(campo); linhas.push(linha); }
+  const [cab, ...resto] = linhas.filter(l => l.some(c => c.trim()));
+  if (!cab) return '';
+  return '<table><thead><tr>' + cab.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
+    resto.map(l => '<tr>' + l.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+}
+
+// ---------------------------------------------------------------- bibliotecas (PDF, DOCX)
+
+const _scripts = {};
+function carregarScript(url) {
+  return _scripts[url] || (_scripts[url] = new Promise((ok, erro) => {
+    const s = document.createElement('script');
+    s.src = url; s.onload = ok; s.onerror = () => erro(new Error('não carregou ' + url));
+    document.head.appendChild(s);
+  }));
+}
+
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+const MAMMOTH = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+
+async function lerPDF(file, nome, progresso) {
+  await carregarScript(PDFJS + 'pdf.min.js');
+  const lib = window.pdfjsLib;
+  if (!lib.GlobalWorkerOptions.workerSrc) {
+    try {
+      const src = await (await fetch(PDFJS + 'pdf.worker.min.js')).text();
+      lib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    } catch (e) { lib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; }
+  }
+  const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const trabalhos = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    progresso && progresso(`${nome}: página ${p}/${pdf.numPages}`);
+    const pg = await pdf.getPage(p);
+    const vp = pg.getViewport({ scale: 96 / 72 });
+    const k = Math.min(2, 4096 / Math.max(vp.width, vp.height));
+    const vp2 = pg.getViewport({ scale: 96 / 72 * k });
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(vp2.width); cv.height = Math.ceil(vp2.height);
+    // intent 'print': o modo 'display' espera requestAnimationFrame, que para quando a janela não está visível
+    await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp2, intent: 'print' }).promise;
+    const bytes = await canvasParaBytes(cv);
+    trabalhos.push({ name: pdf.numPages > 1 ? `${nome} · página ${p}` : nome, kind: 'tree', images: { PAG: bytes },
+      tree: { t: 'F', x: 0, y: 0, w: vp.width, h: vp.height, n: 'página ' + p, clip: true,
+        fills: [{ type: 'IMAGE', key: 'PAG', mode: 'FILL' }], c: [] } });
+  }
+  return trabalhos;
+}
+
+async function lerDOCX(file) {
+  await carregarScript(MAMMOTH);
+  const r = await window.mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+  return paginaDoc(r.value, '.doc{width:794px;padding:72px 80px;font-family:Calibri,Carlito,Arial,sans-serif;font-size:15px;line-height:1.5}');
+}
+
+// ---------------------------------------------------------------- entrada
+
+async function lerImagem(file, nome) {
+  const url = URL.createObjectURL(file);
+  const im = await carregarImg(url);
+  const bytes = await bytesDeImagem(url);
+  const w = im.naturalWidth, h = im.naturalHeight;
+  return { name: nome, kind: 'tree', images: { IMG: bytes },
+    tree: { t: 'R', x: 0, y: 0, w, h, n: nome, fills: [{ type: 'IMAGE', key: 'IMG', mode: 'FILL' }] } };
+}
+
+async function lerSVG(file, nome) {
+  const txt = await file.text();
+  const d = new DOMParser().parseFromString(txt, 'image/svg+xml').documentElement;
+  const vb = (d.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+  const w = px(d.getAttribute('width')) || vb[2] || 0, h = px(d.getAttribute('height')) || vb[3] || 0;
+  if (w && h) { d.setAttribute('width', w); d.setAttribute('height', h); }
+  return { name: nome, kind: 'tree', images: {}, tree: { t: 'S', x: 0, y: 0, w, h, n: nome, svg: new XMLSerializer().serializeToString(d) } };
+}
+
+// arquivos: [{ file, path }] -> trabalhos
+async function lerArquivos(arquivos, progresso) {
+  const acervo = criarAcervo(arquivos);
+  const temDoc = arquivos.some(a => DOCS.has(EXT(a.file.name)));
+  const trabalhos = [], erros = [];
+  for (const { file, path } of arquivos) {
+    const ext = EXT(file.name), nome = tirarExt(file.name);
+    try {
+      if (ext === 'html' || ext === 'htm' || ext === 'xhtml') {
+        trabalhos.push({ name: nome, kind: 'html', html: await prepararHTML(await file.text(), path, acervo) });
+      } else if (ext === 'md' || ext === 'markdown') {
+        const html = await prepararHTML(paginaDoc(markdown(await file.text())), path, acervo);
+        trabalhos.push({ name: nome, kind: 'html', html });
+      } else if (ext === 'txt' || ext === 'log') {
+        trabalhos.push({ name: nome, kind: 'html', html: paginaDoc('<pre style="background:none;padding:0;margin:0;font:14px/1.55 \'Roboto Mono\',Consolas,monospace">' + esc(await file.text()) + '</pre>') });
+      } else if (ext === 'csv' || ext === 'tsv') {
+        const t = await file.text(), amostra = t.slice(0, 2000);
+        const sep = ext === 'tsv' ? '\t' : amostra.split(';').length > amostra.split(',').length ? ';' : ',';
+        trabalhos.push({ name: nome, kind: 'html', html: paginaDoc(csv(t, sep), '.doc{width:auto;display:inline-block}') });
+      } else if (ext === 'json') {
+        let t = await file.text();
+        try { t = JSON.stringify(JSON.parse(t), null, 2); } catch (e) { /* mostra como veio */ }
+        trabalhos.push({ name: nome, kind: 'html', html: paginaDoc('<pre>' + esc(t) + '</pre>') });
+      } else if (ext === 'pdf') {
+        trabalhos.push(...await lerPDF(file, nome, progresso));
+      } else if (ext === 'docx') {
+        trabalhos.push({ name: nome, kind: 'html', html: await lerDOCX(file) });
+      } else if (temDoc) {
+        continue; // imagem/CSS/fonte de apoio de um HTML
+      } else if (ext === 'svg') {
+        trabalhos.push(await lerSVG(file, nome));
+      } else if (IMAGENS.has(ext) || /^image\//.test(file.type)) {
+        trabalhos.push(await lerImagem(file, nome));
+      } else {
+        erros.push(`${file.name}: formato não suportado`);
+      }
+    } catch (e) {
+      erros.push(`${file.name}: ${e.message || e}`);
+    }
+  }
+  return { trabalhos, erros };
+}
+
+// ---- main.js
+// Interface: recebe os arquivos, renderiza cada documento num iframe escondido,
+// mede com o medidor e manda a árvore para o code.js desenhar.
+
+const $ = id => document.getElementById(id);
+const paraFigma = msg => parent.postMessage({ pluginMessage: msg }, '*');
+const esperar = ms => new Promise(ok => setTimeout(ok, ms));
+
+// ---------------------------------------------------------------- opções
+
+const CAMPOS = { largura: 'o-largura', altura: 'o-altura', raiz: 'o-raiz', espera: 'o-espera', quebras: 'o-quebras', achatar: 'o-achatar', svgVetor: 'o-svg' };
+
+function lerOpcoes() {
+  const o = {};
+  for (const [k, id] of Object.entries(CAMPOS)) {
+    const el = $(id);
+    o[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? +el.value : el.value;
+  }
+  return o;
+}
+
+function aplicarOpcoes(o) {
+  if (!o) return;
+  for (const [k, id] of Object.entries(CAMPOS)) {
+    if (!(k in o)) continue;
+    const el = $(id);
+    if (el.type === 'checkbox') el.checked = !!o[k]; else el.value = o[k];
+  }
+}
+
+for (const id of Object.values(CAMPOS)) $(id).addEventListener('change', () => paraFigma({ type: 'save-opts', opts: lerOpcoes() }));
+
+// ---------------------------------------------------------------- registro na tela
+
+function status(t) { $('status').textContent = t || ''; }
+
+function linha(nome) {
+  const li = document.createElement('li');
+  li.innerHTML = '<span class="st">…</span><span class="nome"></span><span class="msg"></span>';
+  li.querySelector('.nome').textContent = nome;
+  $('log').prepend(li);
+  return {
+    ok(m) { li.className = 'ok'; li.querySelector('.st').textContent = '✓'; li.querySelector('.msg').textContent = m || ''; },
+    erro(m) { li.className = 'er'; li.querySelector('.st').textContent = '✕'; li.querySelector('.msg').textContent = m || ''; },
+    msg(m) { li.querySelector('.msg').textContent = m; },
+  };
+}
+
+// ---------------------------------------------------------------- conversa com o code.js
+
+let aguardando = null;
+window.onmessage = (e) => {
+  const m = e.data && e.data.pluginMessage;
+  if (!m) return;
+  if (m.type === 'opts') aplicarOpcoes(m.opts);
+  else if (m.type === 'progress') status(m.text);
+  else if ((m.type === 'done' || m.type === 'error') && aguardando) {
+    const a = aguardando; aguardando = null;
+    m.type === 'done' ? a.ok(m.text) : a.erro(new Error(m.text));
+  }
+};
+
+function desenhar(items) {
+  return new Promise((ok, erro) => {
+    aguardando = { ok, erro };
+    paraFigma({ type: 'build', items });
+  });
+}
+
+// ---------------------------------------------------------------- renderização
+
+async function renderizarEMedir(html, opts) {
+  const velho = $('palco');
+  const f = document.createElement('iframe');
+  f.id = 'palco';
+  f.style.width = opts.largura + 'px';
+  f.style.height = opts.altura + 'px';
+  velho.replaceWith(f);
+  await Promise.race([
+    new Promise(ok => { f.onload = ok; f.srcdoc = html; }),
+    esperar(20000),
+  ]);
+  const doc = f.contentDocument, win = f.contentWindow;
+  if (!doc || !doc.body) throw new Error('não foi possível renderizar o documento');
+  status('Carregando fontes e imagens…');
+  await Promise.race([doc.fonts.ready, esperar(10000)]);
+  const pendentes = [...doc.images].filter(im => !im.complete);
+  await Promise.race([
+    Promise.all(pendentes.map(im => new Promise(ok => { im.onload = im.onerror = ok; }))),
+    esperar(10000),
+  ]);
+  await esperar(opts.espera);
+  await Promise.race([doc.fonts.ready, esperar(5000)]);
+  const medidor = criarMedidor(doc, win, opts);
+  return medidor.medir(status);
+}
+
+// ---------------------------------------------------------------- fila
+
+let ocupado = false;
+
+async function processar(arquivos, colado) {
+  if (ocupado) { status('Aguarde a conversão atual terminar.'); return; }
+  ocupado = true;
+  $('converter').disabled = true;
+  const opts = lerOpcoes();
+  try {
+    status('Lendo arquivos…');
+    const { trabalhos, erros } = colado
+      ? { trabalhos: [{ name: 'HTML colado', kind: 'html', html: colado }], erros: [] }
+      : await lerArquivos(arquivos, status);
+    for (const e of erros) linha(e.split(':')[0]).erro(e.split(':').slice(1).join(':').trim());
+    for (const t of trabalhos) {
+      const l = linha(t.name);
+      try {
+        let items;
+        if (t.kind === 'html') {
+          const medidos = await renderizarEMedir(t.html, opts);
+          if (!medidos.length) throw new Error('nada visível para converter');
+          items = medidos.map((m, i) => ({ name: medidos.length > 1 ? `${t.name} · ${i + 1}` : t.name, tree: m.tree, images: m.images }));
+        } else items = [{ name: t.name, tree: t.tree, images: t.images }];
+        l.msg('desenhando…');
+        const r = await desenhar(items);
+        l.ok(r);
+      } catch (e) {
+        console.error(e);
+        l.erro(e.message || String(e));
+      }
+    }
+    status(trabalhos.length ? 'Concluído.' : erros.length ? 'Nenhum arquivo convertido.' : '');
+  } catch (e) {
+    console.error(e);
+    status('Erro: ' + (e.message || e));
+  } finally {
+    ocupado = false;
+    $('converter').disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------- entrada de arquivos
+
+async function lerEntrada(entry, caminho, out) {
+  if (entry.isFile) {
+    const file = await new Promise((ok, erro) => entry.file(ok, erro));
+    out.push({ file, path: caminho + file.name });
+  } else if (entry.isDirectory) {
+    const leitor = entry.createReader();
+    let lote;
+    do {
+      lote = await new Promise((ok, erro) => leitor.readEntries(ok, erro));
+      for (const e of lote) await lerEntrada(e, caminho + entry.name + '/', out);
+    } while (lote.length);
+  }
+}
+
+const zona = $('zona');
+zona.addEventListener('click', e => { if (e.target === zona || !e.target.closest('button')) $('arquivos').click(); });
+$('escolher').onclick = e => { e.stopPropagation(); $('arquivos').click(); };
+$('pasta').onclick = e => { e.stopPropagation(); $('diretorio').click(); };
+for (const id of ['arquivos', 'diretorio']) {
+  $(id).onchange = (e) => {
+    const lista = [...e.target.files].map(file => ({ file, path: file.webkitRelativePath || file.name }));
+    e.target.value = '';
+    if (lista.length) processar(lista);
+  };
+}
+zona.addEventListener('dragover', e => { e.preventDefault(); zona.classList.add('sobre'); });
+zona.addEventListener('dragleave', () => zona.classList.remove('sobre'));
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  zona.classList.remove('sobre');
+  const out = [];
+  const itens = [...(e.dataTransfer.items || [])];
+  const entradas = itens.map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (entradas.length) for (const en of entradas) await lerEntrada(en, '', out);
+  else for (const file of e.dataTransfer.files) out.push({ file, path: file.name });
+  if (out.length) { processar(out); return; }
+  const texto = e.dataTransfer.getData('text/html') || e.dataTransfer.getData('text/plain');
+  if (texto && /<[a-z!]/i.test(texto)) processar(null, texto);
+});
+
+$('converter').onclick = () => {
+  const h = $('html').value.trim();
+  if (h) processar(null, h);
+};
+
+document.addEventListener('paste', (e) => {
+  if (e.target.closest && e.target.closest('textarea,input')) return;
+  const arquivos = [...e.clipboardData.files].map(file => ({ file, path: file.name }));
+  if (arquivos.length) { processar(arquivos); return; }
+  const h = e.clipboardData.getData('text/html') || e.clipboardData.getData('text/plain');
+  if (h && /<[a-z!]/i.test(h)) processar(null, h);
+});
+
+paraFigma({ type: 'load-opts' });
+
+</script>
+</body>
+</html>

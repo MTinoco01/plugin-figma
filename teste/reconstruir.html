@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!-- Redesenha teste/saida.json com divs absolutas, imitando o que o code.js faz no Figma,
+     para comparar visualmente com o HTML original. -->
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Squada+One&family=Open+Sans:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#888} .n{position:absolute;box-sizing:border-box;transform-origin:0 0}</style>
+</head><body>
+<script>
+const rgba = (c, a = c.a == null ? 1 : c.a) => `rgba(${c.r * 255},${c.g * 255},${c.b * 255},${a})`;
+let IMGS = {};
+function pintura(p, w, h) {
+  if (p.type === 'SOLID') return rgba(p.color, p.opacity == null ? 1 : p.opacity);
+  if (p.type === 'IMAGE') return IMGS[p.key] ? `url(${IMGS[p.key]}) center/${p.mode === 'FIT' ? 'contain' : p.mode === 'CROP' ? '100% 100%' : 'cover'} no-repeat` : '#ccc';
+  // gradiente: inverte a gradientTransform para achar os pontos e monta um linear-gradient equivalente
+  const [[a, b, c], [d, e, f]] = p.gradientTransform, det = a * e - b * d;
+  const M = [[e / det, -b / det, (b * f - e * c) / det], [-d / det, a / det, (d * c - a * f) / det]];
+  const P = (x, y) => [(M[0][0] * x + M[0][1] * y + M[0][2]) * w, (M[1][0] * x + M[1][1] * y + M[1][2]) * h];
+  const st = p.gradientStops.map(s => rgba(s.color) + ' ' + (s.position * 100) + '%').join(',');
+  if (p.type === 'GRADIENT_RADIAL') { const [cx, cy] = P(0.5, 0.5), [rx] = P(1, 0.5); return `radial-gradient(${Math.abs(rx - cx)}px ${Math.abs(P(0.5, 1)[1] - cy)}px at ${cx}px ${cy}px,${st})`; }
+  const [x0, y0] = P(0, 0.5), [x1, y1] = P(1, 0.5);
+  const ang = Math.atan2(x1 - x0, -(y1 - y0)) * 180 / Math.PI;
+  return `linear-gradient(${ang}deg,${st})`;
+}
+function caixa(el, o) {
+  el.style.left = o.x + 'px'; el.style.top = o.y + 'px'; el.style.width = o.w + 'px'; el.style.height = o.h + 'px';
+  if (o.r) { el.style.transformOrigin = '50% 50%'; el.style.transform = `rotate(${o.r}deg)`; }
+  if (o.fills) el.style.background = o.fills.slice().reverse().map(p => pintura(p, o.w, o.h)).join(',');
+  if (o.stroke) { const s = o.stroke; el.style.borderStyle = s.dash ? 'dashed' : 'solid'; el.style.borderColor = pintura(s.paint);
+    el.style.borderWidth = `${s.top}px ${s.right}px ${s.bottom}px ${s.left}px`; }
+  if (o.rad) el.style.borderRadius = o.rad.map(v => v + 'px').join(' ');
+  if (o.clip) el.style.overflow = 'hidden';
+  if (o.o != null) el.style.opacity = o.o;
+  const sh = (o.fx || []).filter(e => /SHADOW/.test(e.type));
+  if (sh.length) el.style.boxShadow = sh.map(e => `${e.type === 'INNER_SHADOW' ? 'inset ' : ''}${e.offset.x}px ${e.offset.y}px ${e.radius}px ${e.spread || 0}px ${rgba(e.color)}`).join(',');
+}
+function desenhar(o, pai) {
+  const el = document.createElement('div'); el.className = 'n'; pai.appendChild(el);
+  if (o.t === 'F' || o.t === 'R') { caixa(el, o); (o.c || []).forEach(c => desenhar(c, el)); }
+  else if (o.t === 'S') { caixa(el, { ...o, fills: null }); el.innerHTML = o.svg; }
+  else if (o.t === 'T') {
+    el.style.whiteSpace = o.auto === 'H' ? 'pre-wrap' : 'pre'; el.style.textAlign = o.al.toLowerCase();
+    if (o.auto === 'H') el.style.width = o.w + 'px';
+    for (const s of o.segs) {
+      const sp = document.createElement('span'); sp.textContent = s.s;
+      Object.assign(sp.style, { fontFamily: `"${s.fam[0]}"`, fontWeight: s.wt, fontStyle: s.it ? 'italic' : 'normal', fontSize: s.size + 'px',
+        letterSpacing: s.ls + 'px', lineHeight: s.lh + 'px', textTransform: { UPPER: 'uppercase', LOWER: 'lowercase', TITLE: 'capitalize' }[s.tc] || 'none',
+        textDecoration: { UNDERLINE: 'underline', STRIKETHROUGH: 'line-through' }[s.td] || 'none' });
+      if (s.fill.type === 'SOLID') sp.style.color = pintura(s.fill);
+      else { sp.style.background = pintura(s.fill, 800, 200); sp.style.webkitBackgroundClip = 'text'; sp.style.color = 'transparent'; }
+      el.appendChild(sp);
+    }
+    el.style.top = o.y + 'px';
+    requestAnimationFrame(() => { const w = el.offsetWidth; el.style.left = (o.ax === 'c' ? o.x - w / 2 : o.ax === 'r' ? o.x - w : o.x) + 'px'; });
+    el.style.left = o.x + 'px';
+  }
+}
+fetch('saida.json').then(r => r.json()).then(async items => {
+  await document.fonts.ready;
+  const it = items[0];
+  for (const k in it.images) IMGS[k] = 'data:image/png;base64,' + it.images[k];
+  const raiz = document.createElement('div'); raiz.style.position = 'relative';
+  document.body.appendChild(raiz);
+  desenhar({ ...it.tree, x: 0, y: 0 }, raiz);
+});
+</script>
+</body></html>

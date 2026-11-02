@@ -1,0 +1,13 @@
+{
+  "name": "Arquivo para Figma",
+  "id": "arquivo-para-figma-2026",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["*"],
+    "reasoning": "Os arquivos importados (HTML, Markdown, DOCX) podem usar fontes, imagens e folhas de estilo de qualquer site; o leitor de PDF e de DOCX vem de cdnjs.cloudflare.com."
+  }
+}
