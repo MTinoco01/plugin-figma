@@ -39,7 +39,7 @@ Se o HTML usa imagens, CSS ou fontes locais, solte tudo junto (ou a pasta inteir
 
 ## Como funciona
 
-A conversão tem duas metades, como no plugin da Apuama. A diferença é que aqui as duas rodam dentro do plugin:
+A conversão tem duas metades, as duas rodam dentro do plugin:
 
 1. **`ui.html` (o navegador que mede).** O arquivo é renderizado num `<iframe>` escondido com a largura escolhida. Depois o plugin:
    - espera as fontes (`document.fonts.ready`) e as imagens;
@@ -50,34 +50,6 @@ A conversão tem duas metades, como no plugin da Apuama. A diferença é que aqu
    - traduz `linear-gradient` e `radial-gradient` para gradientes nativos, e `box-shadow`, `filter: blur`, `backdrop-filter`, bordas por lado, tracejado, cantos por canto, `mix-blend-mode`, `object-fit`, texto com gradiente (`background-clip: text`), marcadores de lista e campos de formulário para as propriedades do Figma;
    - transforma em imagem PNG 2x (via SVG `foreignObject`) o fundo que o Figma não sabe desenhar: padrões com `background-size`, gradientes repetidos ou cônicos, imagens posicionadas.
 2. **`code.js` (o desenhista).** Recebe a árvore (`F` frame, `R` retângulo, `T` texto, `S` svg) e as imagens em bytes. Escolhe para cada texto a fonte instalada mais próxima (família, peso e itálico, com alternativas para `sans-serif`, `serif` e `monospace`), carrega todas antes de começar e cria as camadas com `createFrame`, `createText`, `createRectangle`, `createNodeFromSvg` e `createImage`.
-
-## Estrutura
-
-| Arquivo | Papel |
-| --- | --- |
-| `manifest.json` | Identidade do plugin e acesso à rede (fontes e imagens do HTML, pdf.js e mammoth.js no cdnjs) |
-| `code.js` | Desenha a árvore no Figma (sandbox, sem DOM) |
-| `ui.html` | **Gerado**: a interface com todos os scripts embutidos. Não edite à mão |
-| `src/ui.html` | Marcação e CSS da interface |
-| `src/estilos.js` | Cores, gradientes, bordas, cantos, sombras, imagens |
-| `src/medir.js` | O medidor: DOM → árvore |
-| `src/arquivos.js` | Leitura de cada formato e reescrita dos caminhos locais |
-| `src/main.js` | Interface: arrastar e soltar, fila, conversa com o `code.js` |
-| `build.js` | Junta `src/` em `ui.html` |
-| `exemplos/` | `post.html` (post 1080×1080) e `landing.html` (página com grid, formulário e tabela) |
-| `teste/` | Ferramentas de teste (abaixo) |
-
-Depois de mudar algo em `src/`, rode o build. O Figma lê o `ui.html` gerado:
-
-```bash
-npm run build
-```
-
-Ou deixe recompilando sozinho enquanto edita:
-
-```bash
-npm run watch
-```
 
 ## Testar sem o Figma
 
