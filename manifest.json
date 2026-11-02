@@ -2,8 +2,8 @@
   "name": "Arquivo para Figma",
   "id": "arquivo-para-figma-2026",
   "api": "1.0.0",
-  "main": "code.js",
-  "ui": "ui.html",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",
   "networkAccess": {

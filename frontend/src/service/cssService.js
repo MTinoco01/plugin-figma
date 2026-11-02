@@ -1,18 +1,11 @@
-// Leitura de estilos calculados (getComputedStyle) e tradução para pinturas,
-// bordas, cantos e efeitos no formato da API do Figma.
-
 const px = v => parseFloat(v) || 0;
 const clamp01 = v => Math.max(0, Math.min(1, v));
-
-// ---------------------------------------------------------------- cores
 
 const _cv = document.createElement('canvas');
 _cv.width = _cv.height = 1;
 const _cx = _cv.getContext('2d', { willReadFrequently: true });
 const _cores = new Map();
 
-// Qualquer cor CSS -> { r, g, b, a } de 0 a 1. Formatos que não são rgb()
-// (oklch, color(), hsl, nomes) passam por um pixel de canvas.
 function cor(str) {
   if (!str) return null;
   str = String(str).trim();
@@ -39,7 +32,6 @@ function cor(str) {
 const visivel = c => c && c.a > 0.001;
 const solido = c => ({ type: 'SOLID', color: { r: c.r, g: c.g, b: c.b }, opacity: c.a });
 
-// Separa por vírgula (ou outro separador) respeitando parênteses e aspas.
 function dividir(str, sep = ',') {
   const out = [];
   let nivel = 0, aspas = null, atual = '';
@@ -57,15 +49,12 @@ function dividir(str, sep = ',') {
   return out;
 }
 
-// Tira a cor do começo/fim de um trecho como "rgba(0,0,0,.2) 0px 4px 8px".
 const RE_COR = /(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^)]*\)|#[0-9a-f]{3,8}\b|\b(?!inset\b)[a-z]+\b/i;
 function separarCor(parte) {
   const m = parte.match(RE_COR);
   if (!m) return { c: null, resto: parte };
   return { c: cor(m[0]), resto: (parte.slice(0, m.index) + ' ' + parte.slice(m.index + m[0].length)).trim() };
 }
-
-// ---------------------------------------------------------------- gradientes
 
 function inverter([[a, b, c], [d, e, f]]) {
   const det = a * e - b * d || 1e-9;
@@ -79,12 +68,11 @@ function angulo(s) {
   return { deg: v, rad: v * 180 / Math.PI, turn: v * 360, grad: v * 0.9 }[m[2]];
 }
 
-// Paradas de cor: [{ position 0..1, color }]. `L` converte px em fração.
 function paradas(partes, L) {
   const st = [];
   for (const p of partes) {
     const { c, resto } = separarCor(p);
-    if (!c) continue; // dica de interpolação: ignorada
+    if (!c) continue;
     const pos = resto.split(/\s+/).filter(Boolean).map(t =>
       t.endsWith('%') ? px(t) / 100 : t.endsWith('px') ? px(t) / (L || 1) : null);
     const color = { r: c.r, g: c.g, b: c.b, a: c.a };
@@ -184,20 +172,17 @@ function gradienteRadial(partes, w, h) {
     gradientTransform: inverter([[xc[0], yc[0], o[0]], [xc[1], yc[1], o[1]]]) };
 }
 
-// "linear-gradient(...)" -> pintura do Figma, ou null se não dá para traduzir
 function gradiente(str, w, h) {
   const m = str.match(/^([a-z-]+)\((.*)\)$/s);
   if (!m) return null;
   const partes = dividir(m[2]);
   if (m[1] === 'linear-gradient') return gradienteLinear(partes, w, h);
   if (m[1] === 'radial-gradient') return gradienteRadial(partes, w, h);
-  return null; // conic, repeating-*: viram imagem
+  return null;
 }
 
 const urlDe = s => { const m = s.match(/^url\(\s*["']?(.*?)["']?\s*\)$/s); return m ? m[1] : null; };
 
-// Fundo do elemento. Devolve { fills, raster } — raster=true quando o fundo
-// precisa ser desenhado como imagem (padrões, repetições, gradiente cônico).
 function fundo(cs, w, h, reg) {
   const fills = [];
   const bg = cor(cs.backgroundColor);
@@ -225,8 +210,6 @@ function fundo(cs, w, h, reg) {
   }
   return { fills: fills.concat(sobre.reverse()), raster: false };
 }
-
-// ---------------------------------------------------------------- borda, cantos, sombras
 
 const LADOS = ['Top', 'Right', 'Bottom', 'Left'];
 
@@ -286,8 +269,6 @@ const MISTURAS = { multiply: 'MULTIPLY', screen: 'SCREEN', overlay: 'OVERLAY', d
   difference: 'DIFFERENCE', exclusion: 'EXCLUSION', hue: 'HUE', saturation: 'SATURATION', color: 'COLOR', luminosity: 'LUMINOSITY' };
 const mistura = cs => MISTURAS[cs.mixBlendMode] || null;
 
-// ---------------------------------------------------------------- imagens
-
 function bytesDeDataURL(u) {
   const [cab, dados] = u.split(',');
   if (/;base64/i.test(cab)) {
@@ -323,7 +304,6 @@ const canvasParaBytes = cv => new Promise((ok, erro) => cv.toBlob(async b => {
   ok(new Uint8Array(await b.arrayBuffer()));
 }, 'image/png'));
 
-// Desenha uma fonte de imagem num canvas e devolve PNG (limite do Figma: 4096 px).
 async function paraPNG(fonte, w, h) {
   const k = Math.min(1, 4096 / Math.max(w, h));
   const cv = document.createElement('canvas');
@@ -332,7 +312,6 @@ async function paraPNG(fonte, w, h) {
   return canvasParaBytes(cv);
 }
 
-// Baixa qualquer imagem e devolve bytes que o Figma aceita (PNG, JPG ou GIF).
 async function bytesDeImagem(url) {
   const blob = await blobDe(url);
   const tipo = blob.type;
@@ -345,21 +324,18 @@ async function bytesDeImagem(url) {
   }
   const im = await carregarImg(URL.createObjectURL(blob));
   const w = im.naturalWidth || 512, h = im.naturalHeight || 512;
-  const k = /svg/.test(tipo) ? 2 : 1; // SVG usado como imagem: desenha em 2x
+  const k = /svg/.test(tipo) ? 2 : 1;
   return paraPNG(im, w * k, h * k);
 }
 
-// Troca url(...) dentro de um CSS por data: URLs (para desenhar via SVG).
 async function embutirURLs(css) {
   const urls = [...css.matchAll(/url\(\s*["']?(.*?)["']?\s*\)/g)].map(m => m[1]).filter(u => !u.startsWith('data:'));
   for (const u of new Set(urls)) {
-    try { css = css.split(u).join(await dataURLDe(await blobDe(u))); } catch (e) { /* fica sem a imagem */ }
+    try { css = css.split(u).join(await dataURLDe(await blobDe(u))); } catch (e) {}
   }
   return css;
 }
 
-// Desenha o fundo de um elemento (cor + todas as camadas) como PNG em 2x,
-// usando um SVG com foreignObject — é o "print" do que o Figma não sabe fazer.
 async function rasterizarFundo(cs, w, h) {
   const props = ['background-color', 'background-image', 'background-size', 'background-position',
     'background-repeat', 'background-blend-mode', 'background-origin', 'background-clip'];

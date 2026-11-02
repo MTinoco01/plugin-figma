@@ -1,11 +1,4 @@
-// Interface: recebe os arquivos, renderiza cada documento num iframe escondido,
-// mede com o medidor e manda a árvore para o code.js desenhar.
-
 const $ = id => document.getElementById(id);
-const paraFigma = msg => parent.postMessage({ pluginMessage: msg }, '*');
-const esperar = ms => new Promise(ok => setTimeout(ok, ms));
-
-// ---------------------------------------------------------------- opções
 
 const CAMPOS = { largura: 'o-largura', altura: 'o-altura', raiz: 'o-raiz', espera: 'o-espera', quebras: 'o-quebras', achatar: 'o-achatar', svgVetor: 'o-svg' };
 
@@ -29,8 +22,6 @@ function aplicarOpcoes(o) {
 
 for (const id of Object.values(CAMPOS)) $(id).addEventListener('change', () => paraFigma({ type: 'save-opts', opts: lerOpcoes() }));
 
-// ---------------------------------------------------------------- registro na tela
-
 function status(t) { $('status').textContent = t || ''; }
 
 function linha(nome) {
@@ -44,57 +35,6 @@ function linha(nome) {
     msg(m) { li.querySelector('.msg').textContent = m; },
   };
 }
-
-// ---------------------------------------------------------------- conversa com o code.js
-
-let aguardando = null;
-window.onmessage = (e) => {
-  const m = e.data && e.data.pluginMessage;
-  if (!m) return;
-  if (m.type === 'opts') aplicarOpcoes(m.opts);
-  else if (m.type === 'progress') status(m.text);
-  else if ((m.type === 'done' || m.type === 'error') && aguardando) {
-    const a = aguardando; aguardando = null;
-    m.type === 'done' ? a.ok(m.text) : a.erro(new Error(m.text));
-  }
-};
-
-function desenhar(items) {
-  return new Promise((ok, erro) => {
-    aguardando = { ok, erro };
-    paraFigma({ type: 'build', items });
-  });
-}
-
-// ---------------------------------------------------------------- renderização
-
-async function renderizarEMedir(html, opts) {
-  const velho = $('palco');
-  const f = document.createElement('iframe');
-  f.id = 'palco';
-  f.style.width = opts.largura + 'px';
-  f.style.height = opts.altura + 'px';
-  velho.replaceWith(f);
-  await Promise.race([
-    new Promise(ok => { f.onload = ok; f.srcdoc = html; }),
-    esperar(20000),
-  ]);
-  const doc = f.contentDocument, win = f.contentWindow;
-  if (!doc || !doc.body) throw new Error('não foi possível renderizar o documento');
-  status('Carregando fontes e imagens…');
-  await Promise.race([doc.fonts.ready, esperar(10000)]);
-  const pendentes = [...doc.images].filter(im => !im.complete);
-  await Promise.race([
-    Promise.all(pendentes.map(im => new Promise(ok => { im.onload = im.onerror = ok; }))),
-    esperar(10000),
-  ]);
-  await esperar(opts.espera);
-  await Promise.race([doc.fonts.ready, esperar(5000)]);
-  const medidor = criarMedidor(doc, win, opts);
-  return medidor.medir(status);
-}
-
-// ---------------------------------------------------------------- fila
 
 let ocupado = false;
 
@@ -135,8 +75,6 @@ async function processar(arquivos, colado) {
     $('converter').disabled = false;
   }
 }
-
-// ---------------------------------------------------------------- entrada de arquivos
 
 async function lerEntrada(entry, caminho, out) {
   if (entry.isFile) {

@@ -5,8 +5,6 @@
   "description": "Plugin do Figma que converte HTML, Markdown, DOCX, PDF, SVG e imagens em camadas editáveis",
   "scripts": {
     "build": "node build.js",
-    "watch": "node build.js --watch",
-    "teste:servidor": "node teste/servidor.js",
-    "teste:mock": "node teste/mock-figma.js"
+    "watch": "node build.js --watch"
   }
 }

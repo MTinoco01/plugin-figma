@@ -1,7 +1,3 @@
-// O "medidor": percorre o documento renderizado no iframe e monta a árvore
-// F/R/T/S que o code.js desenha. Usa getBoundingClientRect, getComputedStyle
-// e Range (para medir cada letra e reproduzir as quebras de linha exatas).
-
 const IGNORAR = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'TITLE', 'HEAD', 'TEMPLATE', 'NOSCRIPT', 'BASE']);
 const ATOMICOS = new Set(['IMG', 'SVG', 'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'CANVAS', 'VIDEO', 'IFRAME', 'OBJECT', 'EMBED', 'PICTURE', 'AUDIO', 'METER', 'PROGRESS']);
 const CAIXA_TEXTO = { center: 'CENTER', right: 'RIGHT', end: 'RIGHT', justify: 'JUSTIFIED', '-webkit-center': 'CENTER' };
@@ -38,8 +34,6 @@ function criarMedidor(doc, win, opts) {
   const alturas = new Map();
   const rotacoes = new Map();
 
-  // ------------------------------------------------------------ preparação
-
   function injetarEstilo() {
     const st = doc.createElement('style');
     st.textContent = '*,*::before,*::after{transition:none!important;caret-color:transparent!important}' +
@@ -48,8 +42,6 @@ function criarMedidor(doc, win, opts) {
     (doc.head || doc.documentElement).appendChild(st);
   }
 
-  // ::before e ::after não têm getBoundingClientRect: viram <span> de verdade,
-  // com todo o estilo calculado copiado.
   function materializarPseudos() {
     for (const el of [...doc.body.querySelectorAll('*'), doc.body]) {
       if (IGNORAR.has(el.tagName) || ATOMICOS.has(el.tagName) || el.namespaceURI !== 'http://www.w3.org/1999/xhtml') continue;
@@ -79,7 +71,6 @@ function criarMedidor(doc, win, opts) {
     }
   }
 
-  // Tira a rotação mantendo o centro e a escala (uniforme); guarda o ângulo.
   function normalizarTransformacoes() {
     for (const el of doc.querySelectorAll('*')) {
       if (!(el instanceof win.HTMLElement)) continue;
@@ -99,7 +90,6 @@ function criarMedidor(doc, win, opts) {
           const s = Math.hypot(a, b);
           const [ox, oy] = cs.transformOrigin.split(' ').map(px);
           const vx = el.offsetWidth / 2 - ox, vy = el.offsetHeight / 2 - oy;
-          // centro final = o + A·v + t  ->  com matriz s·I: t' = A·v + t − s·v
           const tx = a * vx + c * vy + e - s * vx, ty = b * vx + d * vy + f - s * vy;
           el.style.setProperty('transform', `matrix(${s}, 0, 0, ${s}, ${tx}, ${ty})`, 'important');
           ang += rot;
@@ -108,8 +98,6 @@ function criarMedidor(doc, win, opts) {
       if (Math.abs(ang) > 0.01) rotacoes.set(el, ang);
     }
   }
-
-  // ------------------------------------------------------------ texto
 
   function alturaNormal(cs) {
     const k = cs.fontFamily + '|' + cs.fontSize + '|' + cs.fontWeight + '|' + cs.fontStyle;
@@ -126,7 +114,6 @@ function criarMedidor(doc, win, opts) {
     return h;
   }
 
-  // Escala visual acumulada (transform: scale) do elemento: tamanho na tela / tamanho de layout.
   const escalas = new Map();
   function escalaDe(el) {
     if (!el || !el.offsetWidth) return 1;
@@ -161,8 +148,6 @@ function criarMedidor(doc, win, opts) {
     };
   }
 
-  // Um "trecho" é uma sequência de nós de texto e elementos inline que vira
-  // UMA camada de texto. Mede letra por letra para saber onde cada linha quebra.
   function textoDoTrecho(itens, bloco, base, clipTexto, saida) {
     const segs = [];
     const linhas = [];
@@ -176,8 +161,6 @@ function criarMedidor(doc, win, opts) {
       const ult = segs[segs.length - 1];
       if (ult && ult.st === st) ult.s += ch; else segs.push({ s: ch, st });
     };
-    // Margem/padding de elementos inline não existe no texto do Figma: vira
-    // espaçamento extra na última letra antes do vão.
     const alargarUltimo = (extra) => {
       const ult = segs[segs.length - 1];
       const chars = [...ult.s], ch = chars.pop();
@@ -291,8 +274,6 @@ function criarMedidor(doc, win, opts) {
     saida.push({ no, grupo: 0, z: 0 });
   }
 
-  // Fundo/borda de <span>, <mark>, <code> etc. dentro do texto: um retângulo
-  // por linha, atrás da camada de texto.
   function decorarInline(el, base, saida) {
     const cs = css(el);
     const bg = fundo(cs, 1, 1, reg), bd = borda(cs), sh = sombras(cs.boxShadow);
@@ -316,8 +297,6 @@ function criarMedidor(doc, win, opts) {
     };
   }
 
-  // ------------------------------------------------------------ filhos
-
   function inlineDeTexto(el) {
     if (el.nodeType !== 1) return true;
     if (el.tagName === 'BR') return true;
@@ -330,8 +309,6 @@ function criarMedidor(doc, win, opts) {
     return true;
   }
 
-  // Lista "achatada" de filhos: display:contents e inlines que contêm blocos
-  // são transparentes.
   function expandir(el) {
     const out = [];
     for (const c of el.childNodes) {
@@ -369,13 +346,11 @@ function criarMedidor(doc, win, opts) {
     return saida.map((s, i) => ({ ...s, i })).sort((a, b) => a.grupo - b.grupo || a.z - b.z || a.i - b.i).map(s => s.no);
   }
 
-  // ------------------------------------------------------------ elementos
-
   function caixa(el, base) {
     const r = el.getBoundingClientRect();
     const o = { x: r.left - base.x, y: r.top - base.y, w: r.width, h: r.height, n: nomeDe(el) };
     const ang = rotacoes.get(el);
-    if (ang) o.r = ang; // mesmo sentido do CSS: a matriz em posicionar() usa y para baixo
+    if (ang) o.r = ang;
     return { o, r };
   }
 
@@ -383,7 +358,6 @@ function criarMedidor(doc, win, opts) {
     const bd = borda(cs);
     if (bd && bd.paint) {
       o.stroke = bd;
-      // tabela com border-collapse: a caixa da célula vai até o meio da linha compartilhada
       if ((el.tagName === 'TD' || el.tagName === 'TH') && el.closest('table') && css(el.closest('table')).borderCollapse === 'collapse') bd.align = 'CENTER';
     }
     o.rad = cantos(cs, o.w, o.h);
@@ -429,7 +403,7 @@ function criarMedidor(doc, win, opts) {
           if (!d.getAttribute('preserveAspectRatio') && cs.objectFit === 'fill') d.setAttribute('preserveAspectRatio', 'none');
           return { t: 'S', ...o, svg: new XMLSerializer().serializeToString(d) };
         }
-      } catch (e) { /* cai para imagem */ }
+      } catch (e) {}
     }
     const fills = await preencherFundo(o, cs);
     fills.push({ type: 'IMAGE', key: reg.imagem(src), mode: MODOS_IMG[cs.objectFit] || 'CROP' });
@@ -456,7 +430,6 @@ function criarMedidor(doc, win, opts) {
       }
     }
     remover.forEach(n => n.remove());
-    // <use href="#id">: troca pela cópia do que ele referencia
     for (const u of copia.querySelectorAll('use')) {
       const ref = (u.getAttribute('href') || u.getAttribute('xlink:href') || '').replace(/^#/, '');
       const alvo = ref && doc.getElementById(ref);
@@ -484,7 +457,6 @@ function criarMedidor(doc, win, opts) {
     return { t: 'S', ...o, svg: txt };
   }
 
-  // Campo de formulário: caixa + texto do valor (ou placeholder).
   function campo(el, o, cs, fills) {
     const no = { t: 'F', ...o, fills, c: [] };
     const lados = estiloDeCaixa(no, cs, el);
@@ -597,11 +569,8 @@ function criarMedidor(doc, win, opts) {
     return no;
   }
 
-  // ------------------------------------------------------------ pós-processo
-
   const temVisual = n => (n.fills && n.fills.length) || n.stroke || (n.fx && n.fx.length) || n.clip || n.r || (n.o != null && n.o < 1) || n.blend;
 
-  // Remove frames sem nada e (opcional) "achata" divs sem estilo, subindo os filhos.
   function simplificar(n, achatar) {
     if (n.t !== 'F') return n;
     const novos = [];
@@ -617,8 +586,6 @@ function criarMedidor(doc, win, opts) {
     n.c = novos;
     return n;
   }
-
-  // ------------------------------------------------------------ entrada
 
   function raizes() {
     const W = doc.documentElement.clientWidth;
@@ -638,7 +605,6 @@ function criarMedidor(doc, win, opts) {
     injetarEstilo();
     materializarPseudos();
     normalizarTransformacoes();
-    // rAF pode ficar parado em iframe fora da tela: o setTimeout garante que segue
     await Promise.race([new Promise(ok => win.requestAnimationFrame(() => ok())), new Promise(ok => setTimeout(ok, 60))]);
     progresso && progresso('Medindo elementos…');
     const lista = raizes();

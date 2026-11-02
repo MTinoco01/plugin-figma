@@ -1,19 +1,3 @@
-// Arquivo para Figma — o "desenhista".
-// Roda na sandbox do Figma: recebe do ui.html uma árvore já medida (F/R/T/S)
-// e as imagens em bytes, e cria as camadas com a API do Figma.
-//
-// Formato da árvore (todas as medidas em px, relativas ao pai):
-//   F  frame      { x, y, w, h, n, r, o, blend, fills, stroke, rad, fx, clip, c:[filhos] }
-//   R  retângulo  { x, y, w, h, n, r, o, blend, fills, stroke, rad, fx }
-//   T  texto      { x, y, w, n, ax, al, auto, segs:[{ s, fam, wt, it, size, fill, ls, lh, tc, td, href }], fx, tstroke }
-//   S  svg        { x, y, w, h, n, r, o, svg }
-// Pinturas (fills) já chegam no formato do Figma, exceto IMAGE, que traz `key`
-// (chave no mapa de imagens) em vez de `imageHash`.
-
-figma.showUI(__html__, { width: 460, height: 640, themeColors: true });
-
-// ---------------------------------------------------------------- fontes
-
 const PESOS = [
   [/hairline|thin/i, 100], [/extra ?light|ultra ?light/i, 200], [/light/i, 300],
   [/semi ?bold|demi ?bold/i, 600], [/extra ?bold|ultra ?bold/i, 800], [/black|heavy/i, 900],
@@ -35,8 +19,8 @@ const GENERICAS = {
   'helvetica neue': ['Helvetica Neue', 'Helvetica', 'Arial', 'Inter'],
 };
 
-let catalogo = null; // família em minúsculas -> { family, styles:[{ style, wt, it, extra }] }
-const resolvidas = new Map(); // chave do pedido -> FontName
+let catalogo = null;
+const resolvidas = new Map();
 const carregadas = new Set();
 
 function pesoDoEstilo(style) {
@@ -108,15 +92,13 @@ async function carregarFontes(arvores) {
   unicas.set('Inter|Regular', { family: 'Inter', style: 'Regular' });
   for (const [k, f] of unicas) {
     if (carregadas.has(k)) continue;
-    try { await figma.loadFontAsync(f); carregadas.add(k); } catch (e) { /* tratado no texto */ }
+    try { await figma.loadFontAsync(f); carregadas.add(k); } catch (e) {}
   }
   for (const s of segs) {
     if (!carregadas.has(s.font.family + '|' + s.font.style)) s.font = { family: 'Inter', style: 'Regular' };
   }
   return unicas.size;
 }
-
-// ---------------------------------------------------------------- imagens e pinturas
 
 let HASHES = {};
 
@@ -142,11 +124,8 @@ function pintura(p) {
 
 const pinturas = lista => (lista || []).map(pintura);
 
-// ---------------------------------------------------------------- construção
-
 function posicionar(n, o, w, h) {
   if (!o.r) { n.x = o.x; n.y = o.y; return; }
-  // CSS gira em torno do centro; o Figma, em torno do canto superior esquerdo.
   const t = o.r * Math.PI / 180, a = Math.cos(t), b = Math.sin(t);
   const cx = o.x + w / 2, cy = o.y + h / 2;
   n.relativeTransform = [[a, -b, cx - (a * w / 2 - b * h / 2)],
@@ -209,7 +188,6 @@ function criarTexto(o, pai) {
   n.textAlignHorizontal = o.al || 'LEFT';
   if (o.auto === 'H') { n.textAutoResize = 'HEIGHT'; n.resize(Math.max(1, o.w), n.height); }
   else n.textAutoResize = 'WIDTH_AND_HEIGHT';
-  // âncora: o navegador diz onde fica a borda esquerda, o centro ou a borda direita
   const x = o.ax === 'c' ? o.x - n.width / 2 : o.ax === 'r' ? o.x - n.width : o.x;
   n.x = x; n.y = o.y;
   if (o.fx && o.fx.length) n.effects = o.fx;
@@ -258,7 +236,43 @@ async function construir(o, pai) {
   return n;
 }
 
-// ---------------------------------------------------------------- maestro
+const TIPOS_NO = new Set(['F', 'R', 'T', 'S']);
+
+function validarNo(o, caminho) {
+  if (!o || typeof o !== 'object') throw new Error(caminho + ': nó ausente');
+  if (!TIPOS_NO.has(o.t)) throw new Error(caminho + ': tipo de nó inválido (' + o.t + ')');
+  for (const k of ['x', 'y']) {
+    if (typeof o[k] !== 'number' || !isFinite(o[k])) throw new Error(caminho + ': ' + k + ' inválido');
+  }
+  if (o.t === 'T') {
+    if (!Array.isArray(o.segs) || !o.segs.length) throw new Error(caminho + ': texto sem trechos');
+  } else if (o.t === 'S') {
+    if (typeof o.svg !== 'string') throw new Error(caminho + ': svg ausente');
+  } else if (!(o.w >= 0 && o.h >= 0)) {
+    throw new Error(caminho + ': tamanho inválido');
+  }
+  if (o.c) o.c.forEach((c, i) => validarNo(c, caminho + '.' + i));
+}
+
+function validarBuild(msg) {
+  if (!Array.isArray(msg.items) || !msg.items.length) throw new Error('nenhum item para desenhar');
+  msg.items.forEach((item, i) => {
+    if (!item.name) throw new Error('item ' + i + ' sem nome');
+    validarNo(item.tree, item.name);
+  });
+}
+
+function comTratamentoDeErro(acao) {
+  return async (msg) => {
+    try {
+      await acao(msg);
+    } catch (e) {
+      const texto = String((e && e.message) || e);
+      figma.ui.postMessage({ type: 'error', text: texto });
+      figma.notify('Erro: ' + texto, { error: true });
+    }
+  };
+}
 
 async function importar(itens) {
   contador = 0;
@@ -283,22 +297,37 @@ async function importar(itens) {
   return { frames: raizes.length, camadas: contador, fontes: nFontes };
 }
 
-figma.ui.onmessage = async (msg) => {
-  if (msg.type === 'build') {
-    try {
-      const r = await importar(msg.items);
-      const txt = r.frames + ' frame(s), ' + r.camadas + ' camadas criadas';
-      figma.ui.postMessage({ type: 'done', text: txt });
-      figma.notify('Pronto! ' + txt);
-    } catch (e) {
-      figma.ui.postMessage({ type: 'error', text: String(e && e.message || e) });
-      figma.notify('Erro: ' + (e && e.message || e), { error: true });
-    }
-  } else if (msg.type === 'save-opts') {
-    await figma.clientStorage.setAsync('opts', msg.opts);
-  } else if (msg.type === 'load-opts') {
-    figma.ui.postMessage({ type: 'opts', opts: (await figma.clientStorage.getAsync('opts')) || null });
-  } else if (msg.type === 'notify') {
-    figma.notify(msg.text, { error: !!msg.error });
-  }
+async function construirItens(msg) {
+  validarBuild(msg);
+  const r = await importar(msg.items);
+  const txt = r.frames + ' frame(s), ' + r.camadas + ' camadas criadas';
+  figma.ui.postMessage({ type: 'done', text: txt });
+  figma.notify('Pronto! ' + txt);
+}
+
+async function salvarOpcoes(msg) {
+  await figma.clientStorage.setAsync('opts', msg.opts);
+}
+
+async function carregarOpcoes() {
+  figma.ui.postMessage({ type: 'opts', opts: (await figma.clientStorage.getAsync('opts')) || null });
+}
+
+function avisar(msg) {
+  figma.notify(msg.text, { error: !!msg.error });
+}
+
+const ROTAS = {
+  build: comTratamentoDeErro(construirItens),
+  'save-opts': comTratamentoDeErro(salvarOpcoes),
+  'load-opts': comTratamentoDeErro(carregarOpcoes),
+  notify: comTratamentoDeErro(avisar),
 };
+
+async function rotear(msg) {
+  const rota = msg && ROTAS[msg.type];
+  if (rota) await rota(msg);
+}
+
+figma.showUI(__html__, { width: 460, height: 640, themeColors: true });
+figma.ui.onmessage = rotear;

@@ -1,9 +1,3 @@
-// Leitura dos arquivos soltos no plugin. Cada arquivo vira um "trabalho":
-//   { name, kind:'html', html }            -> renderizado e medido no iframe
-//   { name, kind:'tree', tree, images }    -> já pronto para o code.js
-// Arquivos de apoio (imagens, CSS, fontes) soltos junto com um HTML são
-// trocados por blob: URLs para que o HTML os encontre.
-
 const EXT = n => (n.match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
 const DOCS = new Set(['html', 'htm', 'xhtml', 'md', 'markdown', 'txt', 'log', 'csv', 'tsv', 'json', 'pdf', 'docx']);
 const IMAGENS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico']);
@@ -50,11 +44,9 @@ function trocarURLsCSS(css, dir, acervo) {
   });
 }
 
-// Reescreve src/href/url() do HTML para os arquivos locais soltos junto.
 async function prepararHTML(html, caminho, acervo) {
   const dir = dirDe(caminho);
   const d = new DOMParser().parseFromString(html, 'text/html');
-  // folhas de estilo locais entram inline, com os url() resolvidos a partir da pasta do CSS
   for (const link of d.querySelectorAll('link[rel~="stylesheet"][href]')) {
     const href = link.getAttribute('href');
     const a = acervo.achar(href, dir);
@@ -82,8 +74,6 @@ async function prepararHTML(html, caminho, acervo) {
   for (const el of d.querySelectorAll('[style]')) el.setAttribute('style', trocarURLsCSS(el.getAttribute('style'), dir, acervo));
   return '<!DOCTYPE html>' + d.documentElement.outerHTML;
 }
-
-// ---------------------------------------------------------------- Markdown e texto
 
 const ESTILO_DOC = `
   html,body{margin:0;background:#fff}
@@ -124,7 +114,6 @@ function markdown(md) {
   const L = md.split('\n');
   let out = '', i = 0;
   const lista = (ini) => {
-    // listas com aninhamento por recuo
     const recuo = l => l.match(/^\s*/)[0].replace(/\t/g, '    ').length;
     const base = recuo(L[ini]);
     const ordenada = /^\s*\d+[.)]\s/.test(L[ini]);
@@ -216,8 +205,6 @@ function csv(texto, sep) {
     resto.map(l => '<tr>' + l.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
 }
 
-// ---------------------------------------------------------------- bibliotecas (PDF, DOCX)
-
 const _scripts = {};
 function carregarScript(url) {
   return _scripts[url] || (_scripts[url] = new Promise((ok, erro) => {
@@ -249,7 +236,6 @@ async function lerPDF(file, nome, progresso) {
     const vp2 = pg.getViewport({ scale: 96 / 72 * k });
     const cv = document.createElement('canvas');
     cv.width = Math.ceil(vp2.width); cv.height = Math.ceil(vp2.height);
-    // intent 'print': o modo 'display' espera requestAnimationFrame, que para quando a janela não está visível
     await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp2, intent: 'print' }).promise;
     const bytes = await canvasParaBytes(cv);
     trabalhos.push({ name: pdf.numPages > 1 ? `${nome} · página ${p}` : nome, kind: 'tree', images: { PAG: bytes },
@@ -264,8 +250,6 @@ async function lerDOCX(file) {
   const r = await window.mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
   return paginaDoc(r.value, '.doc{width:794px;padding:72px 80px;font-family:Calibri,Carlito,Arial,sans-serif;font-size:15px;line-height:1.5}');
 }
-
-// ---------------------------------------------------------------- entrada
 
 async function lerImagem(file, nome) {
   const url = URL.createObjectURL(file);
@@ -285,7 +269,6 @@ async function lerSVG(file, nome) {
   return { name: nome, kind: 'tree', images: {}, tree: { t: 'S', x: 0, y: 0, w, h, n: nome, svg: new XMLSerializer().serializeToString(d) } };
 }
 
-// arquivos: [{ file, path }] -> trabalhos
 async function lerArquivos(arquivos, progresso) {
   const acervo = criarAcervo(arquivos);
   const temDoc = arquivos.some(a => DOCS.has(EXT(a.file.name)));
@@ -306,14 +289,14 @@ async function lerArquivos(arquivos, progresso) {
         trabalhos.push({ name: nome, kind: 'html', html: paginaDoc(csv(t, sep), '.doc{width:auto;display:inline-block}') });
       } else if (ext === 'json') {
         let t = await file.text();
-        try { t = JSON.stringify(JSON.parse(t), null, 2); } catch (e) { /* mostra como veio */ }
+        try { t = JSON.stringify(JSON.parse(t), null, 2); } catch (e) {}
         trabalhos.push({ name: nome, kind: 'html', html: paginaDoc('<pre>' + esc(t) + '</pre>') });
       } else if (ext === 'pdf') {
         trabalhos.push(...await lerPDF(file, nome, progresso));
       } else if (ext === 'docx') {
         trabalhos.push({ name: nome, kind: 'html', html: await lerDOCX(file) });
       } else if (temDoc) {
-        continue; // imagem/CSS/fonte de apoio de um HTML
+        continue;
       } else if (ext === 'svg') {
         trabalhos.push(await lerSVG(file, nome));
       } else if (IMAGENS.has(ext) || /^image\//.test(file.type)) {

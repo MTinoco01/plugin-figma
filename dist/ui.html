@@ -105,22 +105,14 @@
 </main>
 <iframe id="palco"></iframe>
 <script>
-// ---- estilos.js
-// Leitura de estilos calculados (getComputedStyle) e tradução para pinturas,
-// bordas, cantos e efeitos no formato da API do Figma.
-
 const px = v => parseFloat(v) || 0;
 const clamp01 = v => Math.max(0, Math.min(1, v));
-
-// ---------------------------------------------------------------- cores
 
 const _cv = document.createElement('canvas');
 _cv.width = _cv.height = 1;
 const _cx = _cv.getContext('2d', { willReadFrequently: true });
 const _cores = new Map();
 
-// Qualquer cor CSS -> { r, g, b, a } de 0 a 1. Formatos que não são rgb()
-// (oklch, color(), hsl, nomes) passam por um pixel de canvas.
 function cor(str) {
   if (!str) return null;
   str = String(str).trim();
@@ -147,7 +139,6 @@ function cor(str) {
 const visivel = c => c && c.a > 0.001;
 const solido = c => ({ type: 'SOLID', color: { r: c.r, g: c.g, b: c.b }, opacity: c.a });
 
-// Separa por vírgula (ou outro separador) respeitando parênteses e aspas.
 function dividir(str, sep = ',') {
   const out = [];
   let nivel = 0, aspas = null, atual = '';
@@ -165,15 +156,12 @@ function dividir(str, sep = ',') {
   return out;
 }
 
-// Tira a cor do começo/fim de um trecho como "rgba(0,0,0,.2) 0px 4px 8px".
 const RE_COR = /(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^)]*\)|#[0-9a-f]{3,8}\b|\b(?!inset\b)[a-z]+\b/i;
 function separarCor(parte) {
   const m = parte.match(RE_COR);
   if (!m) return { c: null, resto: parte };
   return { c: cor(m[0]), resto: (parte.slice(0, m.index) + ' ' + parte.slice(m.index + m[0].length)).trim() };
 }
-
-// ---------------------------------------------------------------- gradientes
 
 function inverter([[a, b, c], [d, e, f]]) {
   const det = a * e - b * d || 1e-9;
@@ -187,12 +175,11 @@ function angulo(s) {
   return { deg: v, rad: v * 180 / Math.PI, turn: v * 360, grad: v * 0.9 }[m[2]];
 }
 
-// Paradas de cor: [{ position 0..1, color }]. `L` converte px em fração.
 function paradas(partes, L) {
   const st = [];
   for (const p of partes) {
     const { c, resto } = separarCor(p);
-    if (!c) continue; // dica de interpolação: ignorada
+    if (!c) continue;
     const pos = resto.split(/\s+/).filter(Boolean).map(t =>
       t.endsWith('%') ? px(t) / 100 : t.endsWith('px') ? px(t) / (L || 1) : null);
     const color = { r: c.r, g: c.g, b: c.b, a: c.a };
@@ -292,20 +279,17 @@ function gradienteRadial(partes, w, h) {
     gradientTransform: inverter([[xc[0], yc[0], o[0]], [xc[1], yc[1], o[1]]]) };
 }
 
-// "linear-gradient(...)" -> pintura do Figma, ou null se não dá para traduzir
 function gradiente(str, w, h) {
   const m = str.match(/^([a-z-]+)\((.*)\)$/s);
   if (!m) return null;
   const partes = dividir(m[2]);
   if (m[1] === 'linear-gradient') return gradienteLinear(partes, w, h);
   if (m[1] === 'radial-gradient') return gradienteRadial(partes, w, h);
-  return null; // conic, repeating-*: viram imagem
+  return null;
 }
 
 const urlDe = s => { const m = s.match(/^url\(\s*["']?(.*?)["']?\s*\)$/s); return m ? m[1] : null; };
 
-// Fundo do elemento. Devolve { fills, raster } — raster=true quando o fundo
-// precisa ser desenhado como imagem (padrões, repetições, gradiente cônico).
 function fundo(cs, w, h, reg) {
   const fills = [];
   const bg = cor(cs.backgroundColor);
@@ -333,8 +317,6 @@ function fundo(cs, w, h, reg) {
   }
   return { fills: fills.concat(sobre.reverse()), raster: false };
 }
-
-// ---------------------------------------------------------------- borda, cantos, sombras
 
 const LADOS = ['Top', 'Right', 'Bottom', 'Left'];
 
@@ -394,8 +376,6 @@ const MISTURAS = { multiply: 'MULTIPLY', screen: 'SCREEN', overlay: 'OVERLAY', d
   difference: 'DIFFERENCE', exclusion: 'EXCLUSION', hue: 'HUE', saturation: 'SATURATION', color: 'COLOR', luminosity: 'LUMINOSITY' };
 const mistura = cs => MISTURAS[cs.mixBlendMode] || null;
 
-// ---------------------------------------------------------------- imagens
-
 function bytesDeDataURL(u) {
   const [cab, dados] = u.split(',');
   if (/;base64/i.test(cab)) {
@@ -431,7 +411,6 @@ const canvasParaBytes = cv => new Promise((ok, erro) => cv.toBlob(async b => {
   ok(new Uint8Array(await b.arrayBuffer()));
 }, 'image/png'));
 
-// Desenha uma fonte de imagem num canvas e devolve PNG (limite do Figma: 4096 px).
 async function paraPNG(fonte, w, h) {
   const k = Math.min(1, 4096 / Math.max(w, h));
   const cv = document.createElement('canvas');
@@ -440,7 +419,6 @@ async function paraPNG(fonte, w, h) {
   return canvasParaBytes(cv);
 }
 
-// Baixa qualquer imagem e devolve bytes que o Figma aceita (PNG, JPG ou GIF).
 async function bytesDeImagem(url) {
   const blob = await blobDe(url);
   const tipo = blob.type;
@@ -453,21 +431,18 @@ async function bytesDeImagem(url) {
   }
   const im = await carregarImg(URL.createObjectURL(blob));
   const w = im.naturalWidth || 512, h = im.naturalHeight || 512;
-  const k = /svg/.test(tipo) ? 2 : 1; // SVG usado como imagem: desenha em 2x
+  const k = /svg/.test(tipo) ? 2 : 1;
   return paraPNG(im, w * k, h * k);
 }
 
-// Troca url(...) dentro de um CSS por data: URLs (para desenhar via SVG).
 async function embutirURLs(css) {
   const urls = [...css.matchAll(/url\(\s*["']?(.*?)["']?\s*\)/g)].map(m => m[1]).filter(u => !u.startsWith('data:'));
   for (const u of new Set(urls)) {
-    try { css = css.split(u).join(await dataURLDe(await blobDe(u))); } catch (e) { /* fica sem a imagem */ }
+    try { css = css.split(u).join(await dataURLDe(await blobDe(u))); } catch (e) {}
   }
   return css;
 }
 
-// Desenha o fundo de um elemento (cor + todas as camadas) como PNG em 2x,
-// usando um SVG com foreignObject — é o "print" do que o Figma não sabe fazer.
 async function rasterizarFundo(cs, w, h) {
   const props = ['background-color', 'background-image', 'background-size', 'background-position',
     'background-repeat', 'background-blend-mode', 'background-origin', 'background-clip'];
@@ -479,11 +454,6 @@ async function rasterizarFundo(cs, w, h) {
   const im = await carregarImg('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
   return paraPNG(im, w * 2, h * 2);
 }
-
-// ---- medir.js
-// O "medidor": percorre o documento renderizado no iframe e monta a árvore
-// F/R/T/S que o code.js desenha. Usa getBoundingClientRect, getComputedStyle
-// e Range (para medir cada letra e reproduzir as quebras de linha exatas).
 
 const IGNORAR = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'TITLE', 'HEAD', 'TEMPLATE', 'NOSCRIPT', 'BASE']);
 const ATOMICOS = new Set(['IMG', 'SVG', 'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'CANVAS', 'VIDEO', 'IFRAME', 'OBJECT', 'EMBED', 'PICTURE', 'AUDIO', 'METER', 'PROGRESS']);
@@ -521,8 +491,6 @@ function criarMedidor(doc, win, opts) {
   const alturas = new Map();
   const rotacoes = new Map();
 
-  // ------------------------------------------------------------ preparação
-
   function injetarEstilo() {
     const st = doc.createElement('style');
     st.textContent = '*,*::before,*::after{transition:none!important;caret-color:transparent!important}' +
@@ -531,8 +499,6 @@ function criarMedidor(doc, win, opts) {
     (doc.head || doc.documentElement).appendChild(st);
   }
 
-  // ::before e ::after não têm getBoundingClientRect: viram <span> de verdade,
-  // com todo o estilo calculado copiado.
   function materializarPseudos() {
     for (const el of [...doc.body.querySelectorAll('*'), doc.body]) {
       if (IGNORAR.has(el.tagName) || ATOMICOS.has(el.tagName) || el.namespaceURI !== 'http://www.w3.org/1999/xhtml') continue;
@@ -562,7 +528,6 @@ function criarMedidor(doc, win, opts) {
     }
   }
 
-  // Tira a rotação mantendo o centro e a escala (uniforme); guarda o ângulo.
   function normalizarTransformacoes() {
     for (const el of doc.querySelectorAll('*')) {
       if (!(el instanceof win.HTMLElement)) continue;
@@ -582,7 +547,6 @@ function criarMedidor(doc, win, opts) {
           const s = Math.hypot(a, b);
           const [ox, oy] = cs.transformOrigin.split(' ').map(px);
           const vx = el.offsetWidth / 2 - ox, vy = el.offsetHeight / 2 - oy;
-          // centro final = o + A·v + t  ->  com matriz s·I: t' = A·v + t − s·v
           const tx = a * vx + c * vy + e - s * vx, ty = b * vx + d * vy + f - s * vy;
           el.style.setProperty('transform', `matrix(${s}, 0, 0, ${s}, ${tx}, ${ty})`, 'important');
           ang += rot;
@@ -591,8 +555,6 @@ function criarMedidor(doc, win, opts) {
       if (Math.abs(ang) > 0.01) rotacoes.set(el, ang);
     }
   }
-
-  // ------------------------------------------------------------ texto
 
   function alturaNormal(cs) {
     const k = cs.fontFamily + '|' + cs.fontSize + '|' + cs.fontWeight + '|' + cs.fontStyle;
@@ -609,7 +571,6 @@ function criarMedidor(doc, win, opts) {
     return h;
   }
 
-  // Escala visual acumulada (transform: scale) do elemento: tamanho na tela / tamanho de layout.
   const escalas = new Map();
   function escalaDe(el) {
     if (!el || !el.offsetWidth) return 1;
@@ -644,8 +605,6 @@ function criarMedidor(doc, win, opts) {
     };
   }
 
-  // Um "trecho" é uma sequência de nós de texto e elementos inline que vira
-  // UMA camada de texto. Mede letra por letra para saber onde cada linha quebra.
   function textoDoTrecho(itens, bloco, base, clipTexto, saida) {
     const segs = [];
     const linhas = [];
@@ -659,8 +618,6 @@ function criarMedidor(doc, win, opts) {
       const ult = segs[segs.length - 1];
       if (ult && ult.st === st) ult.s += ch; else segs.push({ s: ch, st });
     };
-    // Margem/padding de elementos inline não existe no texto do Figma: vira
-    // espaçamento extra na última letra antes do vão.
     const alargarUltimo = (extra) => {
       const ult = segs[segs.length - 1];
       const chars = [...ult.s], ch = chars.pop();
@@ -774,8 +731,6 @@ function criarMedidor(doc, win, opts) {
     saida.push({ no, grupo: 0, z: 0 });
   }
 
-  // Fundo/borda de <span>, <mark>, <code> etc. dentro do texto: um retângulo
-  // por linha, atrás da camada de texto.
   function decorarInline(el, base, saida) {
     const cs = css(el);
     const bg = fundo(cs, 1, 1, reg), bd = borda(cs), sh = sombras(cs.boxShadow);
@@ -799,8 +754,6 @@ function criarMedidor(doc, win, opts) {
     };
   }
 
-  // ------------------------------------------------------------ filhos
-
   function inlineDeTexto(el) {
     if (el.nodeType !== 1) return true;
     if (el.tagName === 'BR') return true;
@@ -813,8 +766,6 @@ function criarMedidor(doc, win, opts) {
     return true;
   }
 
-  // Lista "achatada" de filhos: display:contents e inlines que contêm blocos
-  // são transparentes.
   function expandir(el) {
     const out = [];
     for (const c of el.childNodes) {
@@ -852,13 +803,11 @@ function criarMedidor(doc, win, opts) {
     return saida.map((s, i) => ({ ...s, i })).sort((a, b) => a.grupo - b.grupo || a.z - b.z || a.i - b.i).map(s => s.no);
   }
 
-  // ------------------------------------------------------------ elementos
-
   function caixa(el, base) {
     const r = el.getBoundingClientRect();
     const o = { x: r.left - base.x, y: r.top - base.y, w: r.width, h: r.height, n: nomeDe(el) };
     const ang = rotacoes.get(el);
-    if (ang) o.r = ang; // mesmo sentido do CSS: a matriz em posicionar() usa y para baixo
+    if (ang) o.r = ang;
     return { o, r };
   }
 
@@ -866,7 +815,6 @@ function criarMedidor(doc, win, opts) {
     const bd = borda(cs);
     if (bd && bd.paint) {
       o.stroke = bd;
-      // tabela com border-collapse: a caixa da célula vai até o meio da linha compartilhada
       if ((el.tagName === 'TD' || el.tagName === 'TH') && el.closest('table') && css(el.closest('table')).borderCollapse === 'collapse') bd.align = 'CENTER';
     }
     o.rad = cantos(cs, o.w, o.h);
@@ -912,7 +860,7 @@ function criarMedidor(doc, win, opts) {
           if (!d.getAttribute('preserveAspectRatio') && cs.objectFit === 'fill') d.setAttribute('preserveAspectRatio', 'none');
           return { t: 'S', ...o, svg: new XMLSerializer().serializeToString(d) };
         }
-      } catch (e) { /* cai para imagem */ }
+      } catch (e) {}
     }
     const fills = await preencherFundo(o, cs);
     fills.push({ type: 'IMAGE', key: reg.imagem(src), mode: MODOS_IMG[cs.objectFit] || 'CROP' });
@@ -939,7 +887,6 @@ function criarMedidor(doc, win, opts) {
       }
     }
     remover.forEach(n => n.remove());
-    // <use href="#id">: troca pela cópia do que ele referencia
     for (const u of copia.querySelectorAll('use')) {
       const ref = (u.getAttribute('href') || u.getAttribute('xlink:href') || '').replace(/^#/, '');
       const alvo = ref && doc.getElementById(ref);
@@ -967,7 +914,6 @@ function criarMedidor(doc, win, opts) {
     return { t: 'S', ...o, svg: txt };
   }
 
-  // Campo de formulário: caixa + texto do valor (ou placeholder).
   function campo(el, o, cs, fills) {
     const no = { t: 'F', ...o, fills, c: [] };
     const lados = estiloDeCaixa(no, cs, el);
@@ -1080,11 +1026,8 @@ function criarMedidor(doc, win, opts) {
     return no;
   }
 
-  // ------------------------------------------------------------ pós-processo
-
   const temVisual = n => (n.fills && n.fills.length) || n.stroke || (n.fx && n.fx.length) || n.clip || n.r || (n.o != null && n.o < 1) || n.blend;
 
-  // Remove frames sem nada e (opcional) "achata" divs sem estilo, subindo os filhos.
   function simplificar(n, achatar) {
     if (n.t !== 'F') return n;
     const novos = [];
@@ -1100,8 +1043,6 @@ function criarMedidor(doc, win, opts) {
     n.c = novos;
     return n;
   }
-
-  // ------------------------------------------------------------ entrada
 
   function raizes() {
     const W = doc.documentElement.clientWidth;
@@ -1121,7 +1062,6 @@ function criarMedidor(doc, win, opts) {
     injetarEstilo();
     materializarPseudos();
     normalizarTransformacoes();
-    // rAF pode ficar parado em iframe fora da tela: o setTimeout garante que segue
     await Promise.race([new Promise(ok => win.requestAnimationFrame(() => ok())), new Promise(ok => setTimeout(ok, 60))]);
     progresso && progresso('Medindo elementos…');
     const lista = raizes();
@@ -1154,13 +1094,6 @@ function criarMedidor(doc, win, opts) {
 
   return { medir };
 }
-
-// ---- arquivos.js
-// Leitura dos arquivos soltos no plugin. Cada arquivo vira um "trabalho":
-//   { name, kind:'html', html }            -> renderizado e medido no iframe
-//   { name, kind:'tree', tree, images }    -> já pronto para o code.js
-// Arquivos de apoio (imagens, CSS, fontes) soltos junto com um HTML são
-// trocados por blob: URLs para que o HTML os encontre.
 
 const EXT = n => (n.match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
 const DOCS = new Set(['html', 'htm', 'xhtml', 'md', 'markdown', 'txt', 'log', 'csv', 'tsv', 'json', 'pdf', 'docx']);
@@ -1208,11 +1141,9 @@ function trocarURLsCSS(css, dir, acervo) {
   });
 }
 
-// Reescreve src/href/url() do HTML para os arquivos locais soltos junto.
 async function prepararHTML(html, caminho, acervo) {
   const dir = dirDe(caminho);
   const d = new DOMParser().parseFromString(html, 'text/html');
-  // folhas de estilo locais entram inline, com os url() resolvidos a partir da pasta do CSS
   for (const link of d.querySelectorAll('link[rel~="stylesheet"][href]')) {
     const href = link.getAttribute('href');
     const a = acervo.achar(href, dir);
@@ -1240,8 +1171,6 @@ async function prepararHTML(html, caminho, acervo) {
   for (const el of d.querySelectorAll('[style]')) el.setAttribute('style', trocarURLsCSS(el.getAttribute('style'), dir, acervo));
   return '<!DOCTYPE html>' + d.documentElement.outerHTML;
 }
-
-// ---------------------------------------------------------------- Markdown e texto
 
 const ESTILO_DOC = `
   html,body{margin:0;background:#fff}
@@ -1282,7 +1211,6 @@ function markdown(md) {
   const L = md.split('\n');
   let out = '', i = 0;
   const lista = (ini) => {
-    // listas com aninhamento por recuo
     const recuo = l => l.match(/^\s*/)[0].replace(/\t/g, '    ').length;
     const base = recuo(L[ini]);
     const ordenada = /^\s*\d+[.)]\s/.test(L[ini]);
@@ -1374,8 +1302,6 @@ function csv(texto, sep) {
     resto.map(l => '<tr>' + l.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
 }
 
-// ---------------------------------------------------------------- bibliotecas (PDF, DOCX)
-
 const _scripts = {};
 function carregarScript(url) {
   return _scripts[url] || (_scripts[url] = new Promise((ok, erro) => {
@@ -1407,7 +1333,6 @@ async function lerPDF(file, nome, progresso) {
     const vp2 = pg.getViewport({ scale: 96 / 72 * k });
     const cv = document.createElement('canvas');
     cv.width = Math.ceil(vp2.width); cv.height = Math.ceil(vp2.height);
-    // intent 'print': o modo 'display' espera requestAnimationFrame, que para quando a janela não está visível
     await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp2, intent: 'print' }).promise;
     const bytes = await canvasParaBytes(cv);
     trabalhos.push({ name: pdf.numPages > 1 ? `${nome} · página ${p}` : nome, kind: 'tree', images: { PAG: bytes },
@@ -1422,8 +1347,6 @@ async function lerDOCX(file) {
   const r = await window.mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
   return paginaDoc(r.value, '.doc{width:794px;padding:72px 80px;font-family:Calibri,Carlito,Arial,sans-serif;font-size:15px;line-height:1.5}');
 }
-
-// ---------------------------------------------------------------- entrada
 
 async function lerImagem(file, nome) {
   const url = URL.createObjectURL(file);
@@ -1443,7 +1366,6 @@ async function lerSVG(file, nome) {
   return { name: nome, kind: 'tree', images: {}, tree: { t: 'S', x: 0, y: 0, w, h, n: nome, svg: new XMLSerializer().serializeToString(d) } };
 }
 
-// arquivos: [{ file, path }] -> trabalhos
 async function lerArquivos(arquivos, progresso) {
   const acervo = criarAcervo(arquivos);
   const temDoc = arquivos.some(a => DOCS.has(EXT(a.file.name)));
@@ -1464,14 +1386,14 @@ async function lerArquivos(arquivos, progresso) {
         trabalhos.push({ name: nome, kind: 'html', html: paginaDoc(csv(t, sep), '.doc{width:auto;display:inline-block}') });
       } else if (ext === 'json') {
         let t = await file.text();
-        try { t = JSON.stringify(JSON.parse(t), null, 2); } catch (e) { /* mostra como veio */ }
+        try { t = JSON.stringify(JSON.parse(t), null, 2); } catch (e) {}
         trabalhos.push({ name: nome, kind: 'html', html: paginaDoc('<pre>' + esc(t) + '</pre>') });
       } else if (ext === 'pdf') {
         trabalhos.push(...await lerPDF(file, nome, progresso));
       } else if (ext === 'docx') {
         trabalhos.push({ name: nome, kind: 'html', html: await lerDOCX(file) });
       } else if (temDoc) {
-        continue; // imagem/CSS/fonte de apoio de um HTML
+        continue;
       } else if (ext === 'svg') {
         trabalhos.push(await lerSVG(file, nome));
       } else if (IMAGENS.has(ext) || /^image\//.test(file.type)) {
@@ -1486,76 +1408,7 @@ async function lerArquivos(arquivos, progresso) {
   return { trabalhos, erros };
 }
 
-// ---- main.js
-// Interface: recebe os arquivos, renderiza cada documento num iframe escondido,
-// mede com o medidor e manda a árvore para o code.js desenhar.
-
-const $ = id => document.getElementById(id);
-const paraFigma = msg => parent.postMessage({ pluginMessage: msg }, '*');
 const esperar = ms => new Promise(ok => setTimeout(ok, ms));
-
-// ---------------------------------------------------------------- opções
-
-const CAMPOS = { largura: 'o-largura', altura: 'o-altura', raiz: 'o-raiz', espera: 'o-espera', quebras: 'o-quebras', achatar: 'o-achatar', svgVetor: 'o-svg' };
-
-function lerOpcoes() {
-  const o = {};
-  for (const [k, id] of Object.entries(CAMPOS)) {
-    const el = $(id);
-    o[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? +el.value : el.value;
-  }
-  return o;
-}
-
-function aplicarOpcoes(o) {
-  if (!o) return;
-  for (const [k, id] of Object.entries(CAMPOS)) {
-    if (!(k in o)) continue;
-    const el = $(id);
-    if (el.type === 'checkbox') el.checked = !!o[k]; else el.value = o[k];
-  }
-}
-
-for (const id of Object.values(CAMPOS)) $(id).addEventListener('change', () => paraFigma({ type: 'save-opts', opts: lerOpcoes() }));
-
-// ---------------------------------------------------------------- registro na tela
-
-function status(t) { $('status').textContent = t || ''; }
-
-function linha(nome) {
-  const li = document.createElement('li');
-  li.innerHTML = '<span class="st">…</span><span class="nome"></span><span class="msg"></span>';
-  li.querySelector('.nome').textContent = nome;
-  $('log').prepend(li);
-  return {
-    ok(m) { li.className = 'ok'; li.querySelector('.st').textContent = '✓'; li.querySelector('.msg').textContent = m || ''; },
-    erro(m) { li.className = 'er'; li.querySelector('.st').textContent = '✕'; li.querySelector('.msg').textContent = m || ''; },
-    msg(m) { li.querySelector('.msg').textContent = m; },
-  };
-}
-
-// ---------------------------------------------------------------- conversa com o code.js
-
-let aguardando = null;
-window.onmessage = (e) => {
-  const m = e.data && e.data.pluginMessage;
-  if (!m) return;
-  if (m.type === 'opts') aplicarOpcoes(m.opts);
-  else if (m.type === 'progress') status(m.text);
-  else if ((m.type === 'done' || m.type === 'error') && aguardando) {
-    const a = aguardando; aguardando = null;
-    m.type === 'done' ? a.ok(m.text) : a.erro(new Error(m.text));
-  }
-};
-
-function desenhar(items) {
-  return new Promise((ok, erro) => {
-    aguardando = { ok, erro };
-    paraFigma({ type: 'build', items });
-  });
-}
-
-// ---------------------------------------------------------------- renderização
 
 async function renderizarEMedir(html, opts) {
   const velho = $('palco');
@@ -1583,7 +1436,64 @@ async function renderizarEMedir(html, opts) {
   return medidor.medir(status);
 }
 
-// ---------------------------------------------------------------- fila
+const paraFigma = msg => parent.postMessage({ pluginMessage: msg }, '*');
+
+let aguardando = null;
+window.onmessage = (e) => {
+  const m = e.data && e.data.pluginMessage;
+  if (!m) return;
+  if (m.type === 'opts') aplicarOpcoes(m.opts);
+  else if (m.type === 'progress') status(m.text);
+  else if ((m.type === 'done' || m.type === 'error') && aguardando) {
+    const a = aguardando; aguardando = null;
+    m.type === 'done' ? a.ok(m.text) : a.erro(new Error(m.text));
+  }
+};
+
+function desenhar(items) {
+  return new Promise((ok, erro) => {
+    aguardando = { ok, erro };
+    paraFigma({ type: 'build', items });
+  });
+}
+
+const $ = id => document.getElementById(id);
+
+const CAMPOS = { largura: 'o-largura', altura: 'o-altura', raiz: 'o-raiz', espera: 'o-espera', quebras: 'o-quebras', achatar: 'o-achatar', svgVetor: 'o-svg' };
+
+function lerOpcoes() {
+  const o = {};
+  for (const [k, id] of Object.entries(CAMPOS)) {
+    const el = $(id);
+    o[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? +el.value : el.value;
+  }
+  return o;
+}
+
+function aplicarOpcoes(o) {
+  if (!o) return;
+  for (const [k, id] of Object.entries(CAMPOS)) {
+    if (!(k in o)) continue;
+    const el = $(id);
+    if (el.type === 'checkbox') el.checked = !!o[k]; else el.value = o[k];
+  }
+}
+
+for (const id of Object.values(CAMPOS)) $(id).addEventListener('change', () => paraFigma({ type: 'save-opts', opts: lerOpcoes() }));
+
+function status(t) { $('status').textContent = t || ''; }
+
+function linha(nome) {
+  const li = document.createElement('li');
+  li.innerHTML = '<span class="st">…</span><span class="nome"></span><span class="msg"></span>';
+  li.querySelector('.nome').textContent = nome;
+  $('log').prepend(li);
+  return {
+    ok(m) { li.className = 'ok'; li.querySelector('.st').textContent = '✓'; li.querySelector('.msg').textContent = m || ''; },
+    erro(m) { li.className = 'er'; li.querySelector('.st').textContent = '✕'; li.querySelector('.msg').textContent = m || ''; },
+    msg(m) { li.querySelector('.msg').textContent = m; },
+  };
+}
 
 let ocupado = false;
 
@@ -1624,8 +1534,6 @@ async function processar(arquivos, colado) {
     $('converter').disabled = false;
   }
 }
-
-// ---------------------------------------------------------------- entrada de arquivos
 
 async function lerEntrada(entry, caminho, out) {
   if (entry.isFile) {
@@ -1682,7 +1590,6 @@ document.addEventListener('paste', (e) => {
 });
 
 paraFigma({ type: 'load-opts' });
-
 </script>
 </body>
 </html>
